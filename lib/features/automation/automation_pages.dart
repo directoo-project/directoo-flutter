@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/api_exception.dart';
 import '../../core/json.dart';
 import '../../core/labels.dart';
-import '../../data/directoo_api.dart';
-import '../../models/models.dart';
-import '../../state/session.dart';
+import '../../domain/repositories/automation_repository.dart';
+import '../../domain/entities/models.dart';
+import '../../presentation/session/session_bloc.dart';
 import '../../widgets/ui.dart';
 
 class AutomationListPage extends StatefulWidget {
@@ -34,7 +34,7 @@ class _AutomationListPageState extends State<AutomationListPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     if (id != null && id != _loadedFor) {
       _loadedFor = id;
       _load();
@@ -46,7 +46,7 @@ class _AutomationListPageState extends State<AutomationListPage> {
     if (id == null) return;
     setState(() => _loading = true);
     try {
-      final items = await context.read<DirectooApi>().automations(id, widget.triggerType);
+      final items = await context.read<AutomationRepository>().automations(id, widget.triggerType);
       if (mounted) {
         setState(() {
           _items = items;
@@ -61,10 +61,10 @@ class _AutomationListPageState extends State<AutomationListPage> {
   }
 
   Future<void> _toggle(AutomationFlow flow) async {
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     if (id == null) return;
     final next = flow.status == 'active' ? 'inactive' : 'active';
-    await context.read<DirectooApi>().saveAutomation(id, {'status': next}, flowId: flow.id);
+    await context.read<AutomationRepository>().saveAutomation(id, {'status': next}, flowId: flow.id);
     await _load();
   }
 
@@ -77,8 +77,8 @@ class _AutomationListPageState extends State<AutomationListPage> {
   }
 
   Future<void> _delete(AutomationFlow flow) async {
-    final id = context.read<SessionController>().workspaceId;
-    final api = context.read<DirectooApi>();
+    final id = context.read<SessionBloc>().workspaceId;
+    final api = context.read<AutomationRepository>();
     if (id == null || !await confirmDelete(context, 'حذف این اتوماسیون؟')) return;
     if (!mounted) return;
     await api.deleteAutomation(id, flow.id);
@@ -87,7 +87,7 @@ class _AutomationListPageState extends State<AutomationListPage> {
 
   @override
   Widget build(BuildContext context) {
-    final canEdit = context.watch<SessionController>().permissions.canManageAutomation;
+    final canEdit = context.watch<SessionBloc>().permissions.canManageAutomation;
     return Column(
       children: [
         PageHeader(
@@ -173,10 +173,10 @@ class _AutomationEditorPageState extends State<AutomationEditorPage> {
   }
 
   Future<void> _load() async {
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     if (id == null) return;
     try {
-      final flows = await context.read<DirectooApi>().automations(id, widget.triggerType);
+      final flows = await context.read<AutomationRepository>().automations(id, widget.triggerType);
       final flow = flows.where((item) => item.id == widget.flowId).firstOrNull;
       if (flow != null) {
         _name.text = flow.name;
@@ -281,7 +281,7 @@ class _AutomationEditorPageState extends State<AutomationEditorPage> {
   }
 
   Future<void> _save() async {
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     if (id == null) return;
     if (_keywordList.isEmpty && !(widget.triggerType == 'comment' && _match == 'any')) {
       setState(() => _error = 'حداقل یک کلمه کلیدی وارد کنید.');
@@ -292,7 +292,7 @@ class _AutomationEditorPageState extends State<AutomationEditorPage> {
       _error = null;
     });
     try {
-      await context.read<DirectooApi>().saveAutomation(id, _payload(), flowId: widget.flowId);
+      await context.read<AutomationRepository>().saveAutomation(id, _payload(), flowId: widget.flowId);
       if (mounted) Navigator.pop(context, true);
     } catch (error) {
       if (mounted) setState(() => _error = errorText(error));
@@ -410,10 +410,10 @@ class _IceBreakersPageState extends State<IceBreakersPage> {
   }
 
   Future<void> _load() async {
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     if (id == null) return;
     try {
-      final flows = await context.read<DirectooApi>().automations(id, 'ice_breaker');
+      final flows = await context.read<AutomationRepository>().automations(id, 'ice_breaker');
       if (flows.isNotEmpty) {
         final flow = flows.first;
         _flowId = flow.id;
@@ -442,7 +442,7 @@ class _IceBreakersPageState extends State<IceBreakersPage> {
   }
 
   Future<void> _save() async {
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     if (id == null) return;
     setState(() => _saving = true);
     final steps = <Json>[
@@ -468,7 +468,7 @@ class _IceBreakersPageState extends State<IceBreakersPage> {
           },
     ];
     try {
-      final saved = await context.read<DirectooApi>().saveAutomation(id, {
+      final saved = await context.read<AutomationRepository>().saveAutomation(id, {
         'name': 'پیام خوش‌آمدگویی',
         'description': 'پیام خوش‌آمدگویی و میانبرهای شروع مکالمه دایرکت',
         'status': _active ? 'active' : 'inactive',
@@ -486,7 +486,15 @@ class _IceBreakersPageState extends State<IceBreakersPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const LoadingView();
+    if (_loading) {
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PageHeader(title: 'پیام خوش‌آمدگویی', description: 'متن خوش‌آمد و حداکثر ۴ میانبر شروع مکالمه'),
+          Expanded(child: LoadingView()),
+        ],
+      );
+    }
     return ListView(
       children: [
         const PageHeader(title: 'پیام خوش‌آمدگویی', description: 'متن خوش‌آمد و حداکثر ۴ میانبر شروع مکالمه'),

@@ -1,4 +1,4 @@
-import '../core/json.dart';
+import '../../core/json.dart';
 
 class AuthUser {
   const AuthUser({
@@ -716,6 +716,8 @@ class Plan {
     required this.priceYearly,
     required this.discountMonthly,
     required this.discountYearly,
+    required this.durationDaysMonthly,
+    required this.durationDaysYearly,
     required this.maxConversations,
     required this.features,
   });
@@ -727,15 +729,28 @@ class Plan {
   final double priceYearly;
   final double discountMonthly;
   final double discountYearly;
+  final int durationDaysMonthly;
+  final int? durationDaysYearly;
   final int maxConversations;
   final List<String> features;
 
+  double listPrice(String interval) => interval == 'yearly' ? priceYearly : priceMonthly;
+
+  double discountPercent(String interval) => interval == 'yearly' ? discountYearly : discountMonthly;
+
   double finalPrice(String interval) {
-    final price = interval == 'yearly' ? priceYearly : priceMonthly;
-    final discount = interval == 'yearly' ? discountYearly : discountMonthly;
+    final price = listPrice(interval);
+    final discount = discountPercent(interval);
     if (discount <= 0) return price;
     return (price * (100 - discount) / 100).roundToDouble();
   }
+
+  int periodDays(String interval) {
+    if (interval == 'yearly') return durationDaysYearly ?? 0;
+    return durationDaysMonthly > 0 ? durationDaysMonthly : 30;
+  }
+
+  bool offersInterval(String interval) => periodDays(interval) > 0;
 
   factory Plan.fromJson(Json json) => Plan(
         id: asInt(json['id']),
@@ -745,6 +760,8 @@ class Plan {
         priceYearly: asDouble(json['price_yearly']),
         discountMonthly: asDouble(json['discount_percent_monthly']),
         discountYearly: asDouble(json['discount_percent_yearly']),
+        durationDaysMonthly: asInt(json['duration_days_monthly'], fallback: 30),
+        durationDaysYearly: json['duration_days_yearly'] == null ? null : asInt(json['duration_days_yearly']),
         maxConversations: asInt(json['max_conversations']),
         features: asStringList(json['features']),
       );

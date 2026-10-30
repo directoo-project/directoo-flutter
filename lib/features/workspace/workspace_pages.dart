@@ -1,32 +1,32 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api_exception.dart';
 import '../../core/format.dart';
 import '../../core/labels.dart';
 import '../../core/permissions.dart';
-import '../../data/directoo_api.dart';
-import '../../models/models.dart';
-import '../../state/session.dart';
+import '../../domain/repositories/auth_repository.dart';
+import '../../domain/repositories/billing_repository.dart';
+import '../../domain/repositories/instagram_repository.dart';
+import '../../domain/repositories/knowledge_repository.dart';
+import '../../domain/repositories/workspace_repository.dart';
+import '../../domain/entities/models.dart';
+import '../../presentation/session/session_bloc.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/ui.dart';
 import '../home/home_page.dart';
+import '../shell/dashboard_shell.dart';
 
 class AnalyticsPage extends StatelessWidget {
   const AnalyticsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        PageHeader(title: 'گزارش‌ها', description: 'آمار ۱۴ روز گذشته فضای کاری'),
-        Expanded(child: HomePage()),
-      ],
-    );
+    return const HomePage(mode: HomeMode.analytics);
   }
 }
 
@@ -66,9 +66,9 @@ class _KnowledgePageState extends State<KnowledgePage> {
   }
 
   Future<void> _load() async {
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     if (id == null) return;
-    final api = context.read<DirectooApi>();
+    final api = context.read<KnowledgeRepository>();
     try {
       final business = await api.business(id);
       final rules = await api.rules(id);
@@ -90,8 +90,8 @@ class _KnowledgePageState extends State<KnowledgePage> {
   }
 
   Future<void> _saveBusiness() async {
-    final id = context.read<SessionController>().workspaceId;
-    final api = context.read<DirectooApi>();
+    final id = context.read<SessionBloc>().workspaceId;
+    final api = context.read<KnowledgeRepository>();
     if (id == null) return;
     try {
       await api.updateBusiness(id, {
@@ -131,22 +131,30 @@ class _KnowledgePageState extends State<KnowledgePage> {
       ),
     );
     if (ok != true || !mounted) return;
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     if (id == null) return;
-    final created = await context.read<DirectooApi>().saveFaq(id, question: question.text.trim(), answer: answer.text.trim());
+    final created = await context.read<KnowledgeRepository>().saveFaq(id, question: question.text.trim(), answer: answer.text.trim());
     setState(() => _faqs = [..._faqs, created]);
   }
 
   Future<void> _deleteFaq(Faq faq) async {
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     if (id == null) return;
-    await context.read<DirectooApi>().deleteFaq(id, faq.id);
+    await context.read<KnowledgeRepository>().deleteFaq(id, faq.id);
     setState(() => _faqs = _faqs.where((item) => item.id != faq.id).toList());
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const LoadingView();
+    if (_loading) {
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PageHeader(title: 'پایگاه دانش', description: 'اطلاعات کسب‌وکار، قوانین پاسخ و سؤالات متداول'),
+          Expanded(child: LoadingView()),
+        ],
+      );
+    }
     return ListView(
       children: [
         const PageHeader(title: 'پایگاه دانش', description: 'اطلاعات کسب‌وکار، قوانین پاسخ و سؤالات متداول'),
@@ -216,11 +224,11 @@ class _TeamPageState extends State<TeamPage> {
   }
 
   Future<void> _load() async {
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     if (id == null) return;
     setState(() => _loading = true);
     try {
-      final items = await context.read<DirectooApi>().members(id);
+      final items = await context.read<WorkspaceRepository>().members(id);
       if (mounted) setState(() => _items = items);
     } catch (error) {
       if (mounted) setState(() => _error = errorText(error));
@@ -231,7 +239,7 @@ class _TeamPageState extends State<TeamPage> {
 
   Future<void> _invite() async {
     final phone = TextEditingController();
-    final roles = assignableRoles(context.read<SessionController>().workspace?.role);
+    final roles = assignableRoles(context.read<SessionBloc>().workspace?.role);
     if (roles.isEmpty) return;
     var role = roles.first;
     final ok = await showFormSheet<bool>(
@@ -257,10 +265,10 @@ class _TeamPageState extends State<TeamPage> {
       ),
     );
     if (ok != true || !mounted) return;
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     if (id == null) return;
     try {
-      await context.read<DirectooApi>().addMember(id, normalizePhone(phone.text), role);
+      await context.read<WorkspaceRepository>().addMember(id, normalizePhone(phone.text), role);
       await _load();
     } catch (error) {
       if (mounted) setState(() => _error = errorText(error));
@@ -269,8 +277,16 @@ class _TeamPageState extends State<TeamPage> {
 
   @override
   Widget build(BuildContext context) {
-    final canInvite = context.watch<SessionController>().permissions.canManageTeam;
-    if (_loading) return const LoadingView();
+    final canInvite = context.watch<SessionBloc>().permissions.canManageTeam;
+    if (_loading) {
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PageHeader(title: 'تیم', description: 'اعضا و نقش‌های فضای کاری'),
+          Expanded(child: LoadingView()),
+        ],
+      );
+    }
     return Column(
       children: [
         PageHeader(title: 'تیم', description: 'اعضا و نقش‌های فضای کاری', action: canInvite ? IconButton(onPressed: _invite, icon: const Icon(Icons.person_add_alt)) : null),
@@ -331,11 +347,11 @@ class _WalletPageState extends State<WalletPage> {
   }
 
   Future<void> _load() async {
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     if (id == null) return;
     setState(() => _loading = true);
     try {
-      final api = context.read<DirectooApi>();
+      final api = context.read<BillingRepository>();
       final wallet = await api.wallet(id);
       final packages = await api.walletPackages(id);
       final transactions = await api.walletTransactions(id);
@@ -361,7 +377,7 @@ class _WalletPageState extends State<WalletPage> {
   }
 
   Future<void> _topUp() async {
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     final payload = _payload();
     if (id == null || payload == null) {
       setState(() => _error = 'یک بسته یا مبلغ سفارشی انتخاب کنید.');
@@ -369,7 +385,7 @@ class _WalletPageState extends State<WalletPage> {
     }
     setState(() => _submitting = true);
     try {
-      final url = await context.read<DirectooApi>().topUp(id, packageId: payload.packageId, amount: payload.amount);
+      final url = await context.read<BillingRepository>().topUp(id, packageId: payload.packageId, amount: payload.amount);
       await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
     } catch (error) {
       if (mounted) setState(() => _error = errorText(error));
@@ -379,7 +395,7 @@ class _WalletPageState extends State<WalletPage> {
   }
 
   Future<void> _card() async {
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     final payload = _payload();
     if (id == null || payload == null) return;
     if (payload.amount != null && (payload.amount! < 10000 || payload.amount! > 50000000)) {
@@ -390,7 +406,7 @@ class _WalletPageState extends State<WalletPage> {
     if (file == null || !mounted) return;
     setState(() => _submitting = true);
     try {
-      final message = await context.read<DirectooApi>().topUpCard(
+      final message = await context.read<BillingRepository>().topUpCard(
             id,
             packageId: payload.packageId,
             amount: payload.amount,
@@ -408,7 +424,15 @@ class _WalletPageState extends State<WalletPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const LoadingView();
+    if (_loading) {
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PageHeader(title: 'کیف پول', description: 'موجودی، شارژ و تاریخچه تراکنش‌ها'),
+          Expanded(child: LoadingView()),
+        ],
+      );
+    }
     final tx = _transactions.where((item) => _filter == 'all' || item.type == _filter).toList();
     return ListView(
       children: [
@@ -484,6 +508,7 @@ class _BillingPageState extends State<BillingPage> {
   Subscription? _subscription;
   WalletInfo? _wallet;
   var _interval = 'monthly';
+  var _pickedInterval = false;
   final _discount = TextEditingController();
   final _referral = TextEditingController();
   var _loading = true;
@@ -505,11 +530,11 @@ class _BillingPageState extends State<BillingPage> {
   }
 
   Future<void> _load() async {
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     if (id == null) return;
     setState(() => _loading = true);
     try {
-      final api = context.read<DirectooApi>();
+      final api = context.read<BillingRepository>();
       final plans = await api.plans();
       final subscription = await api.subscription(id);
       final wallet = await api.wallet(id);
@@ -523,6 +548,10 @@ class _BillingPageState extends State<BillingPage> {
         _subscription = subscription;
         _wallet = wallet;
         _payments = payments;
+        _error = null;
+        if (!_pickedInterval && subscription != null) {
+          _interval = subscription.billingInterval == 'yearly' ? 'yearly' : 'monthly';
+        }
       });
     } catch (error) {
       if (mounted) setState(() => _error = errorText(error));
@@ -532,8 +561,8 @@ class _BillingPageState extends State<BillingPage> {
   }
 
   Future<void> _upgrade(Plan plan, String method) async {
-    final session = context.read<SessionController>();
-    final api = context.read<DirectooApi>();
+    final session = context.read<SessionBloc>();
+    final api = context.read<BillingRepository>();
     final id = session.workspaceId;
     if (id == null) return;
     setState(() => _busy = plan.id);
@@ -562,19 +591,17 @@ class _BillingPageState extends State<BillingPage> {
     }
   }
 
-  Future<void> _card(Plan plan) async {
-    final id = context.read<SessionController>().workspaceId;
+  Future<void> _submitReceipt(Plan plan, String path, String filename) async {
+    final id = context.read<SessionBloc>().workspaceId;
     if (id == null) return;
-    final file = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
-    if (file == null || !mounted) return;
     setState(() => _busy = plan.id);
     try {
-      final message = await context.read<DirectooApi>().upgradeCardToCard(
+      final message = await context.read<BillingRepository>().upgradeCardToCard(
             id,
             planId: plan.id,
             interval: _interval,
-            receiptPath: file.path,
-            filename: file.name,
+            receiptPath: path,
+            filename: filename,
             discount: _discount.text.trim(),
             referral: _referral.text.trim(),
           );
@@ -588,141 +615,109 @@ class _BillingPageState extends State<BillingPage> {
   }
 
   Future<void> _openPayment(Plan plan) async {
-    final price = plan.finalPrice(_interval);
-    final free = price <= 0 || plan.tier == 'free';
     await showFormSheet<void>(
       context,
-      builder: (sheetContext) => Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          PageHeader(
-            title: free ? 'انتخاب ${plan.name}' : 'ارتقا به ${plan.name}',
-            description: free ? 'این طرح بدون پرداخت فعال می‌شود.' : toman(price),
-          ),
-          TextField(controller: _discount, decoration: const InputDecoration(labelText: 'کد تخفیف')),
-          const SizedBox(height: 8),
-          TextField(controller: _referral, decoration: const InputDecoration(labelText: 'کد معرف')),
-          if (_wallet != null) ...[
-            const SizedBox(height: 12),
-            Text('موجودی کیف پول: ${toman(_wallet!.balance)}', style: TextStyle(color: sheetContext.dt.textMuted)),
-          ],
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(sheetContext);
-              _upgrade(plan, 'gateway');
-            },
-            child: Text(free ? 'انتخاب' : 'پرداخت آنلاین'),
-          ),
-          if (!free) ...[
-            const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: () {
-                Navigator.pop(sheetContext);
-                _upgrade(plan, 'wallet');
-              },
-              child: const Text('کسر از کیف پول'),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: () {
-                Navigator.pop(sheetContext);
-                _card(plan);
-              },
-              child: const Text('کارت به کارت'),
-            ),
-          ],
-        ],
+      builder: (sheetContext) => _UpgradeSheet(
+        plan: plan,
+        interval: _interval,
+        discount: _discount,
+        referral: _referral,
+        walletBalance: _wallet?.balance,
+        onGateway: () {
+          Navigator.pop(sheetContext);
+          _upgrade(plan, 'gateway');
+        },
+        onWallet: () {
+          Navigator.pop(sheetContext);
+          _upgrade(plan, 'wallet');
+        },
+        onReceipt: (path, filename) {
+          Navigator.pop(sheetContext);
+          _submitReceipt(plan, path, filename);
+        },
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const LoadingView();
-    final dt = context.dt;
+    const header = PageHeader(title: 'اشتراک', description: 'طرح، مصرف و پرداخت از درگاه، کیف پول یا کارت به کارت');
+    if (_loading && _plans.isEmpty && _subscription == null) {
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          header,
+          Expanded(child: _BillingSkeleton()),
+        ],
+      );
+    }
+    if (_error != null && _plans.isEmpty && _subscription == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          header,
+          Expanded(child: ErrorView(message: _error!, onRetry: _load)),
+        ],
+      );
+    }
     final current = _subscription;
-    final canBill = context.watch<SessionController>().permissions.canManageBilling;
-    final period = current == null ? null : _period(current);
-    return ListView(
-      children: [
-        const PageHeader(title: 'اشتراک', description: 'طرح، مصرف و پرداخت از درگاه، کیف پول یا کارت به کارت'),
-        if (_message != null) NoticeBanner(message: _message!),
-        if (_error != null) NoticeBanner(message: _error!, error: true),
-        if (current != null)
-          SurfaceCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Expanded(child: Text('طرح فعلی', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16))),
-                    if (current.billingInterval.isNotEmpty)
-                      StatusBadge(label: current.billingInterval == 'yearly' ? 'پرداخت سالانه' : 'پرداخت ماهانه', color: dt.textMuted),
-                    const SizedBox(width: 6),
-                    StatusBadge(label: _subscriptionStatus(current.status), color: current.status == 'active' ? dt.success : dt.warning),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Text(current.plan.name, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, height: 1.2)),
-                if (period != null) ...[
-                  const SizedBox(height: 16),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(99),
-                    child: LinearProgressIndicator(value: period.percent, minHeight: 8, backgroundColor: dt.surfaceMuted, color: dt.primary),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'گذشته از دوره ${faInt(period.elapsed)} / ${faInt(period.total)} روز · باقی‌مانده ${faInt(period.remaining)} روز',
-                    style: TextStyle(color: dt.textMuted, fontSize: 12, height: 1.6),
-                  ),
-                ],
-                if (current.plan.maxConversations > 0) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    'مصرف گفتگو ${faInt(current.usageConversations)} از ${faInt(current.plan.maxConversations)}',
-                    style: TextStyle(color: dt.textMuted, fontSize: 12),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        const SizedBox(height: 20),
-        Row(
-          children: [
-            const Expanded(child: Text('طرح‌ها', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16))),
-            _IntervalChip(label: 'ماهانه', selected: _interval == 'monthly', onTap: () => setState(() => _interval = 'monthly')),
-            const SizedBox(width: 8),
-            _IntervalChip(label: 'سالانه', selected: _interval == 'yearly', onTap: () => setState(() => _interval = 'yearly')),
+    final canBill = context.watch<SessionBloc>().permissions.canManageBilling;
+    final plans = [for (final plan in _plans) if (plan.offersInterval(_interval)) plan];
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          header,
+          if (_message != null) NoticeBanner(message: _message!),
+          if (_error != null) NoticeBanner(message: _error!, error: true),
+          _CurrentPlanCard(subscription: current, period: current == null ? null : _period(current), statusLabel: current == null ? '' : _subscriptionStatus(current.status)),
+          if (_wallet != null) ...[
+            const SizedBox(height: 12),
+            _WalletStrip(balance: _wallet!.balance),
           ],
-        ),
-        const SizedBox(height: 12),
-        for (final plan in _plans) ...[
-          _PlanCard(
-            plan: plan,
-            interval: _interval,
-            current: current != null && current.plan.id == plan.id && current.status == 'active',
-            busy: _busy == plan.id,
-            enabled: canBill,
-            onSelect: () => _openPayment(plan),
+          const SizedBox(height: 22),
+          Row(
+            children: [
+              const Expanded(child: Text('طرح‌ها', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18))),
+              _IntervalToggle(
+                interval: _interval,
+                onChanged: (value) => setState(() {
+                  _pickedInterval = true;
+                  _interval = value;
+                }),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
-        ],
-        Align(
-          alignment: AlignmentDirectional.centerStart,
-          child: TextButton(onPressed: () => context.go('/dashboard/wallet'), child: const Text('شارژ کیف پول')),
-        ),
-        if (_payments.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          const Text('تاریخچه پرداخت', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-          const SizedBox(height: 10),
-          for (final payment in _payments) ...[
-            _PaymentRow(payment: payment),
-            const SizedBox(height: 8),
+          if (plans.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Text('برای این بازه طرحی تعریف نشده.', textAlign: TextAlign.center),
+            ),
+          for (final plan in plans) ...[
+            _PlanCard(
+              plan: plan,
+              interval: _interval,
+              current: current != null && current.plan.id == plan.id && current.billingInterval == _interval && current.status == 'active',
+              busy: _busy == plan.id,
+              enabled: canBill,
+              onSelect: () => _openPayment(plan),
+            ),
+            const SizedBox(height: 12),
           ],
+          if (_payments.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            const Text('تاریخچه پرداخت', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+            const SizedBox(height: 10),
+            for (final payment in _payments) ...[
+              _PaymentRow(payment: payment),
+              const SizedBox(height: 8),
+            ],
+          ],
+          const SizedBox(height: 8),
         ],
-      ],
+      ),
     );
   }
 
@@ -784,10 +779,11 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _load() async {
-    final session = context.read<SessionController>();
-    final api = context.read<DirectooApi>();
+    final session = context.read<SessionBloc>();
+    final auth = context.read<AuthRepository>();
+    final instagram = context.read<InstagramRepository>();
     try {
-      _user = await api.me();
+      _user = await auth.me();
       _first.text = _user?.firstName ?? '';
       _last.text = _user?.lastName ?? '';
       _email.text = _user?.email ?? '';
@@ -796,7 +792,7 @@ class _SettingsPageState extends State<SettingsPage> {
       final id = session.workspaceId;
       if (id != null) {
         try {
-          _accounts = await api.instagramAccounts(id);
+          _accounts = await instagram.instagramAccounts(id);
         } catch (_) {}
       }
     } catch (error) {
@@ -808,7 +804,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _saveProfile() async {
     try {
-      _user = await context.read<DirectooApi>().updateProfile(firstName: _first.text.trim(), lastName: _last.text.trim(), email: _email.text.trim());
+      _user = await context.read<AuthRepository>().updateProfile(firstName: _first.text.trim(), lastName: _last.text.trim(), email: _email.text.trim());
       if (mounted) setState(() => _message = 'پروفایل ذخیره شد.');
     } catch (error) {
       if (mounted) setState(() => _error = errorText(error));
@@ -819,7 +815,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final file = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (file == null || !mounted) return;
     try {
-      _user = await context.read<DirectooApi>().uploadAvatar(file.path, file.name);
+      _user = await context.read<AuthRepository>().uploadAvatar(file.path, file.name);
       if (mounted) setState(() => _message = 'تصویر پروفایل ذخیره شد.');
     } catch (error) {
       if (mounted) setState(() => _error = errorText(error));
@@ -827,11 +823,11 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _saveWorkspace() async {
-    final session = context.read<SessionController>();
+    final session = context.read<SessionBloc>();
     final workspace = session.workspace;
     if (workspace == null) return;
     try {
-      await context.read<DirectooApi>().updateWorkspace(workspace.id, {
+      await context.read<WorkspaceRepository>().updateWorkspace(workspace.id, {
         'name': _workspaceName.text.trim(),
         'timezone': _timezone.text.trim(),
       });
@@ -860,8 +856,8 @@ class _SettingsPageState extends State<SettingsPage> {
     final title = name.text.trim();
     name.dispose();
     if (ok != true || !mounted || title.isEmpty) return;
-    final session = context.read<SessionController>();
-    final api = context.read<DirectooApi>();
+    final session = context.read<SessionBloc>();
+    final api = context.read<WorkspaceRepository>();
     try {
       final created = await api.createWorkspace(title);
       await session.reloadWorkspaces();
@@ -873,8 +869,8 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _disconnect(InstagramAccount account) async {
-    final id = context.read<SessionController>().workspaceId;
-    final api = context.read<DirectooApi>();
+    final id = context.read<SessionBloc>().workspaceId;
+    final api = context.read<InstagramRepository>();
     if (id == null || !await confirmDelete(context, 'قطع اتصال اینستاگرام؟')) return;
     if (!mounted) return;
     try {
@@ -891,8 +887,16 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const LoadingView();
-    final session = context.watch<SessionController>();
+    if (_loading) {
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PageHeader(title: 'تنظیمات', description: 'حساب کاربری، فضای کاری و اینستاگرام'),
+          Expanded(child: LoadingView()),
+        ],
+      );
+    }
+    final session = context.watch<SessionBloc>();
     final dt = context.dt;
     final user = _user;
     final connected = _accounts.where((account) => account.status == 'connected' || account.status.isEmpty).toList();
@@ -1033,27 +1037,224 @@ class _Period {
   final double percent;
 }
 
-class _IntervalChip extends StatelessWidget {
-  const _IntervalChip({required this.label, required this.selected, required this.onTap});
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
+class _BillingSkeleton extends StatelessWidget {
+  const _BillingSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      physics: const NeverScrollableScrollPhysics(),
+      children: const [
+        SkeletonBox(height: 176, radius: 22),
+        SizedBox(height: 12),
+        SkeletonBox(height: 72, radius: 18),
+        SizedBox(height: 22),
+        SkeletonBox(height: 36, width: 180, radius: 18),
+        SizedBox(height: 12),
+        SkeletonBox(height: 168, radius: 20),
+        SizedBox(height: 12),
+        SkeletonBox(height: 168, radius: 20),
+        SizedBox(height: 12),
+        SkeletonBox(height: 168, radius: 20),
+      ],
+    );
+  }
+}
+
+class _CurrentPlanCard extends StatelessWidget {
+  const _CurrentPlanCard({required this.subscription, required this.period, required this.statusLabel});
+
+  final Subscription? subscription;
+  final _Period? period;
+  final String statusLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final dt = context.dt;
+    final current = subscription;
+    final active = current?.status == 'active';
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: dt.primary.withValues(alpha: 0.28)),
+        gradient: LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+          colors: [dt.primary50, dt.surface],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(color: dt.surface, borderRadius: BorderRadius.circular(14)),
+                child: Icon(Icons.credit_card_rounded, color: dt.primary, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: Text('طرح فعلی', style: TextStyle(color: dt.textMuted, fontWeight: FontWeight.w700))),
+              if (current != null) StatusBadge(label: statusLabel, color: active ? dt.success : dt.warning),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            current?.plan.name ?? 'بدون اشتراک',
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, height: 1.2, color: dt.text),
+          ),
+          const SizedBox(height: 8),
+          if (current == null)
+            Text('یکی از طرح‌ها را انتخاب کنید تا ابزارهای پنل باز شود.', style: TextStyle(color: dt.textMuted, height: 1.6))
+          else
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: StatusBadge(
+                label: current.billingInterval == 'yearly' ? 'پرداخت سالانه' : 'پرداخت ماهانه',
+                color: dt.primary,
+              ),
+            ),
+          if (period != null) ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Text('باقی‌مانده', style: TextStyle(color: dt.textMuted, fontSize: 13)),
+                const Spacer(),
+                Text('${faInt(period!.remaining)} روز', style: const TextStyle(fontWeight: FontWeight.w800)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: LinearProgressIndicator(
+                value: period!.percent,
+                minHeight: 8,
+                backgroundColor: dt.surface,
+                color: dt.primary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'گذشته از دوره ${faInt(period!.elapsed)} از ${faInt(period!.total)} روز',
+              style: TextStyle(color: dt.textSubtle, fontSize: 12, height: 1.5),
+            ),
+          ],
+          if (current != null && current.plan.maxConversations > 0) ...[
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Text('مصرف گفتگو', style: TextStyle(color: dt.textMuted, fontSize: 13)),
+                const Spacer(),
+                Text(
+                  '${faInt(current.usageConversations)} از ${faInt(current.plan.maxConversations)}',
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: LinearProgressIndicator(
+                value: (current.usageConversations / current.plan.maxConversations).clamp(0, 1).toDouble(),
+                minHeight: 6,
+                backgroundColor: dt.surface,
+                color: dt.coral,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _WalletStrip extends StatelessWidget {
+  const _WalletStrip({required this.balance});
+
+  final double balance;
 
   @override
   Widget build(BuildContext context) {
     final dt = context.dt;
     return Material(
-      color: selected ? dt.surface : dt.surfaceMuted,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(999),
-        side: BorderSide(color: selected ? dt.border : Colors.transparent),
+      color: dt.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: BorderSide(color: dt.border)),
+      child: InkWell(
+        onTap: () => openDashboardRoute(context, '/dashboard/wallet'),
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(color: dt.primary50, borderRadius: BorderRadius.circular(14)),
+                child: Icon(Icons.account_balance_wallet_outlined, color: dt.primary, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('کیف پول', style: TextStyle(color: dt.textMuted, fontSize: 12)),
+                    const SizedBox(height: 2),
+                    Text(toman(balance), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                  ],
+                ),
+              ),
+              Text('شارژ', style: TextStyle(color: dt.primary, fontWeight: FontWeight.w800)),
+              Icon(Icons.chevron_left, color: dt.primary, size: 20),
+            ],
+          ),
+        ),
       ),
+    );
+  }
+}
+
+class _IntervalToggle extends StatelessWidget {
+  const _IntervalToggle({required this.interval, required this.onChanged});
+
+  final String interval;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final dt = context.dt;
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: dt.surface,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: dt.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _chip(context, 'ماهانه', interval == 'monthly', () => onChanged('monthly')),
+          _chip(context, 'سالانه', interval == 'yearly', () => onChanged('yearly')),
+        ],
+      ),
+    );
+  }
+
+  Widget _chip(BuildContext context, String label, bool selected, VoidCallback onTap) {
+    final dt = context.dt;
+    return Material(
+      color: selected ? dt.primary : Colors.transparent,
+      borderRadius: BorderRadius.circular(999),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(999),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          child: Text(label, style: TextStyle(fontWeight: FontWeight.w700, color: selected ? dt.text : dt.textMuted)),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          child: Text(
+            label,
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: selected ? dt.onPrimary : dt.textMuted),
+          ),
         ),
       ),
     );
@@ -1081,39 +1282,98 @@ class _PlanCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final dt = context.dt;
     final price = plan.finalPrice(interval);
+    final list = plan.listPrice(interval);
+    final discount = plan.discountPercent(interval);
     final free = price <= 0 || plan.tier == 'free';
-    return SurfaceCard(
+    final days = plan.periodDays(interval);
+    final bullets = plan.features.isNotEmpty
+        ? plan.features
+        : [
+            if (plan.maxConversations > 0) 'تا ${faInt(plan.maxConversations)} گفتگو',
+          ];
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: current ? dt.primary50 : dt.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: current ? dt.primary : dt.border, width: current ? 1.6 : 1),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(plan.name, style: TextStyle(color: dt.textMuted, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          Text(free ? 'رایگان' : toman(price), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
-          if (interval == 'yearly' && !free)
+          Row(
+            children: [
+              Expanded(child: Text(plan.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+              if (current) StatusBadge(label: 'فعال', color: dt.success),
+            ],
+          ),
+          if (days > 0) ...[
+            const SizedBox(height: 4),
+            Text('مدت اشتراک: ${faInt(days)} روز', style: TextStyle(color: dt.textMuted, fontSize: 13)),
+          ],
+          const SizedBox(height: 12),
+          if (!free && discount > 0 && list > price)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                children: [
+                  Text(
+                    toman(list),
+                    style: TextStyle(color: dt.textSubtle, decoration: TextDecoration.lineThrough, fontSize: 13),
+                  ),
+                  const SizedBox(width: 8),
+                  StatusBadge(label: '${faInt(discount)}٪ تخفیف', color: dt.coral),
+                ],
+              ),
+            ),
+          Text(free ? 'رایگان' : toman(price), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, height: 1.2)),
+          if (interval == 'yearly' && !free && days > 0)
             Padding(
               padding: const EdgeInsets.only(top: 4),
-              child: Text('پرداخت سالانه', style: TextStyle(color: dt.textMuted, fontSize: 12)),
+              child: Text(
+                'معادل ${toman(price / (days / 30))} در ماه',
+                style: TextStyle(color: dt.textMuted, fontSize: 12),
+              ),
             ),
-          if (plan.features.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            for (final feature in plan.features)
+          if (bullets.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            for (final feature in bullets.take(5))
               Padding(
-                padding: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.only(bottom: 8),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.check, size: 16, color: dt.primary),
-                    const SizedBox(width: 6),
-                    Expanded(child: Text(feature, style: TextStyle(color: dt.textMuted, height: 1.5))),
+                    Icon(Icons.check_circle_rounded, size: 18, color: current ? dt.primary : dt.success),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(feature, style: TextStyle(color: dt.text, height: 1.45))),
                   ],
                 ),
               ),
           ],
-          const SizedBox(height: 12),
+          const SizedBox(height: 6),
           if (current)
-            const Align(alignment: AlignmentDirectional.centerStart, child: StatusBadge(label: 'فعال', color: Color(0xFF16A34A)))
+            Container(
+              height: 48,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: dt.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: dt.border),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(width: 8, height: 8, decoration: BoxDecoration(color: dt.success, shape: BoxShape.circle)),
+                  const SizedBox(width: 8),
+                  Text('فعال', style: TextStyle(color: dt.success, fontWeight: FontWeight.w800)),
+                ],
+              ),
+            )
           else if (enabled)
-            FilledButton(onPressed: busy ? null : onSelect, child: Text(busy ? 'در حال پردازش...' : (free ? 'انتخاب' : 'پرداخت و ارتقا'))),
+            FilledButton(
+              onPressed: busy ? null : onSelect,
+              child: Text(busy ? 'در حال پردازش...' : (free ? 'انتخاب' : 'پرداخت و ارتقا')),
+            ),
         ],
       ),
     );
@@ -1140,32 +1400,268 @@ class _PaymentRow extends StatelessWidget {
       'wallet' => 'کیف پول',
       _ => 'درگاه',
     };
-    final kind = payment.type == 'wallet_topup' ? 'شارژ کیف پول' : 'اشتراک';
+    final title = payment.type == 'wallet_topup'
+        ? (payment.description.isEmpty ? 'شارژ کیف پول' : payment.description)
+        : (payment.description.isEmpty ? '$method · اشتراک' : payment.description);
     return SurfaceCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(payment.description.isEmpty ? kind : payment.description, style: const TextStyle(fontWeight: FontWeight.w800)),
-                const SizedBox(height: 4),
-                Text('$method · $kind', style: TextStyle(color: dt.textMuted, fontSize: 12)),
-                Text(formatJalali(payment.createdAt), style: TextStyle(color: dt.textSubtle, fontSize: 12)),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          Row(
             children: [
+              Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w800))),
+              const SizedBox(width: 8),
               StatusBadge(label: status.$1, color: status.$2),
-              const SizedBox(height: 6),
-              Text(toman(payment.amount), style: const TextStyle(fontWeight: FontWeight.w800)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(child: _meta(context, 'مبلغ', toman(payment.amount))),
+              Expanded(child: _meta(context, 'تاریخ', formatJalali(payment.createdAt, withTime: false))),
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _meta(BuildContext context, String label, String value) {
+    final dt = context.dt;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(color: dt.textSubtle, fontSize: 12)),
+        const SizedBox(height: 4),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w800)),
+      ],
+    );
+  }
+}
+
+class _UpgradeSheet extends StatefulWidget {
+  const _UpgradeSheet({
+    required this.plan,
+    required this.interval,
+    required this.discount,
+    required this.referral,
+    required this.walletBalance,
+    required this.onGateway,
+    required this.onWallet,
+    required this.onReceipt,
+  });
+
+  final Plan plan;
+  final String interval;
+  final TextEditingController discount;
+  final TextEditingController referral;
+  final double? walletBalance;
+  final VoidCallback onGateway;
+  final VoidCallback onWallet;
+  final void Function(String path, String filename) onReceipt;
+
+  @override
+  State<_UpgradeSheet> createState() => _UpgradeSheetState();
+}
+
+class _UpgradeSheetState extends State<_UpgradeSheet> {
+  var _cardStep = false;
+  var _loadingCard = false;
+  CardInfo? _card;
+  String? _cardError;
+  var _copied = false;
+
+  double get _price => widget.plan.finalPrice(widget.interval);
+  bool get _free => _price <= 0 || widget.plan.tier == 'free';
+
+  Future<void> _openCard() async {
+    setState(() {
+      _cardStep = true;
+      _loadingCard = true;
+      _cardError = null;
+    });
+    final id = context.read<SessionBloc>().workspaceId;
+    if (id == null) {
+      setState(() => _loadingCard = false);
+      return;
+    }
+    try {
+      final card = await context.read<BillingRepository>().cardInfo(id);
+      if (mounted) setState(() => _card = card);
+    } catch (error) {
+      if (mounted) setState(() => _cardError = errorText(error));
+    } finally {
+      if (mounted) setState(() => _loadingCard = false);
+    }
+  }
+
+  Future<void> _pickReceipt() async {
+    final file = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (file == null) return;
+    widget.onReceipt(file.path, file.name);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dt = context.dt;
+    if (_cardStep) return _cardBody(dt);
+    final balance = widget.walletBalance;
+    final enough = balance != null && balance >= _price;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(_free ? 'انتخاب ${widget.plan.name}' : 'ارتقا به ${widget.plan.name}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 6),
+        Text(
+          _free ? 'این طرح بدون پرداخت فعال می‌شود.' : toman(_price),
+          style: TextStyle(color: _free ? dt.textMuted : dt.primary, fontWeight: FontWeight.w800, fontSize: _free ? 14 : 22),
+        ),
+        if (!_free) ...[
+          const SizedBox(height: 16),
+          TextField(controller: widget.discount, decoration: const InputDecoration(labelText: 'کد تخفیف')),
+          const SizedBox(height: 8),
+          TextField(controller: widget.referral, decoration: const InputDecoration(labelText: 'کد معرف')),
+          const SizedBox(height: 16),
+          _PayTile(
+            icon: Icons.credit_score_rounded,
+            title: 'پرداخت آنلاین',
+            subtitle: 'انتقال به درگاه و فعال‌سازی فوری',
+            onTap: widget.onGateway,
+          ),
+          const SizedBox(height: 8),
+          _PayTile(
+            icon: Icons.account_balance_wallet_outlined,
+            title: 'کیف پول',
+            subtitle: balance == null
+                ? 'کسر از موجودی کیف پول'
+                : enough
+                    ? 'موجودی ${toman(balance)} — بلافاصله فعال می‌شود'
+                    : 'موجودی ${toman(balance)} کافی نیست',
+            enabled: balance == null || enough,
+            onTap: widget.onWallet,
+          ),
+          const SizedBox(height: 8),
+          _PayTile(
+            icon: Icons.receipt_long_outlined,
+            title: 'کارت به کارت',
+            subtitle: 'واریز مبلغ و ارسال تصویر فیش',
+            onTap: _openCard,
+          ),
+        ] else ...[
+          const SizedBox(height: 16),
+          FilledButton(onPressed: widget.onGateway, child: const Text('انتخاب')),
+        ],
+      ],
+    );
+  }
+
+  Widget _cardBody(DtColors dt) {
+    final card = _card;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            IconButton(
+              tooltip: 'بازگشت',
+              visualDensity: VisualDensity.compact,
+              onPressed: () => setState(() => _cardStep = false),
+              icon: const Icon(Icons.arrow_forward, textDirection: TextDirection.ltr),
+            ),
+            const SizedBox(width: 4),
+            const Expanded(child: Text('کارت به کارت', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+          ],
+        ),
+        Text('مبلغ دقیق ${toman(_price)} را واریز کنید، سپس تصویر فیش را بفرستید.', style: TextStyle(color: dt.textMuted, height: 1.6)),
+        const SizedBox(height: 14),
+        if (_loadingCard)
+          const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Center(child: CircularProgressIndicator()))
+        else if (_cardError != null)
+          NoticeBanner(message: _cardError!, error: true)
+        else if (card != null)
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: dt.primary50, borderRadius: BorderRadius.circular(16)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (card.bankName.isNotEmpty) Text(card.bankName, style: TextStyle(color: dt.textMuted, fontSize: 12)),
+                const SizedBox(height: 6),
+                Text(faDigits(card.number), textDirection: TextDirection.ltr, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: 1)),
+                if (card.holderName.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(card.holderName, style: TextStyle(color: dt.textMuted)),
+                ],
+                const SizedBox(height: 8),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: card.number));
+                      if (mounted) setState(() => _copied = true);
+                    },
+                    icon: Icon(_copied ? Icons.check_rounded : Icons.copy_rounded, size: 18),
+                    label: Text(_copied ? 'کپی شد' : 'کپی شماره کارت'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 16),
+        FilledButton(onPressed: _pickReceipt, child: const Text('بارگذاری فیش')),
+      ],
+    );
+  }
+}
+
+class _PayTile extends StatelessWidget {
+  const _PayTile({required this.icon, required this.title, required this.subtitle, required this.onTap, this.enabled = true});
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final dt = context.dt;
+    return Opacity(
+      opacity: enabled ? 1 : 0.55,
+      child: Material(
+        color: dt.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: dt.border)),
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(color: dt.primary50, borderRadius: BorderRadius.circular(14)),
+                  child: Icon(icon, color: dt.primary, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 2),
+                      Text(subtitle, style: TextStyle(color: dt.textMuted, fontSize: 12, height: 1.4)),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_left, color: dt.textSubtle),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -159,8 +159,10 @@ ThemeData buildTheme({required bool isDark}) {
       style: FilledButton.styleFrom(
         backgroundColor: colors.primary,
         foregroundColor: colors.onPrimary,
+        disabledBackgroundColor: colors.primary.withValues(alpha: 0.45),
+        disabledForegroundColor: colors.onPrimary,
         minimumSize: const Size.fromHeight(48),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
       ),
     ),

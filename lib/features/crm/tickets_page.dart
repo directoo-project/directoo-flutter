@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/api_exception.dart';
 import '../../core/format.dart';
 import '../../core/labels.dart';
-import '../../data/directoo_api.dart';
-import '../../models/models.dart';
-import '../../state/session.dart';
+import '../../domain/repositories/tickets_repository.dart';
+import '../../domain/entities/models.dart';
+import '../../presentation/session/session_bloc.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/ui.dart';
 
@@ -29,7 +29,7 @@ class _TicketsPageState extends State<TicketsPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     if (id != null && id != _loadedFor) {
       _loadedFor = id;
       _load();
@@ -47,7 +47,7 @@ class _TicketsPageState extends State<TicketsPage> {
     if (id == null) return;
     setState(() => _loading = true);
     try {
-      final items = await context.read<DirectooApi>().tickets(id, status: _status, search: _search.text.trim());
+      final items = await context.read<TicketsRepository>().tickets(id, status: _status, search: _search.text.trim());
       if (mounted) {
         setState(() {
           _items = items;
@@ -90,10 +90,10 @@ class _TicketsPageState extends State<TicketsPage> {
       ),
     );
     if (created != true || !mounted) return;
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     if (id == null || subject.text.trim().isEmpty) return;
     try {
-      await context.read<DirectooApi>().saveTicket(id, {
+      await context.read<TicketsRepository>().saveTicket(id, {
         'subject': subject.text.trim(),
         'description': description.text.trim(),
         'priority': priority,
@@ -107,7 +107,7 @@ class _TicketsPageState extends State<TicketsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final canEdit = context.watch<SessionController>().permissions.canEditTickets;
+    final canEdit = context.watch<SessionBloc>().permissions.canEditTickets;
     return Column(
       children: [
         PageHeader(
@@ -183,11 +183,11 @@ class _TicketDetailPageState extends State<TicketDetailPage> {
   }
 
   Future<void> _load() async {
-    final workspaceId = context.read<SessionController>().workspaceId;
+    final workspaceId = context.read<SessionBloc>().workspaceId;
     if (workspaceId == null) return;
     setState(() => _loading = true);
     try {
-      final ticket = await context.read<DirectooApi>().ticket(workspaceId, widget.id);
+      final ticket = await context.read<TicketsRepository>().ticket(workspaceId, widget.id);
       if (mounted) setState(() => _ticket = ticket);
     } catch (error) {
       if (mounted) setState(() => _error = errorText(error));
@@ -197,11 +197,11 @@ class _TicketDetailPageState extends State<TicketDetailPage> {
   }
 
   Future<void> _send() async {
-    final workspaceId = context.read<SessionController>().workspaceId;
+    final workspaceId = context.read<SessionBloc>().workspaceId;
     final text = _comment.text.trim();
     if (workspaceId == null || text.isEmpty) return;
     try {
-      await context.read<DirectooApi>().addTicketComment(workspaceId, widget.id, text);
+      await context.read<TicketsRepository>().addTicketComment(workspaceId, widget.id, text);
       _comment.clear();
       await _load();
     } catch (error) {
@@ -210,11 +210,11 @@ class _TicketDetailPageState extends State<TicketDetailPage> {
   }
 
   Future<void> _setStatus(String status) async {
-    final workspaceId = context.read<SessionController>().workspaceId;
+    final workspaceId = context.read<SessionBloc>().workspaceId;
     final ticket = _ticket;
     if (workspaceId == null || ticket == null) return;
     try {
-      final updated = await context.read<DirectooApi>().saveTicket(workspaceId, {'status': status}, ticketId: ticket.id);
+      final updated = await context.read<TicketsRepository>().saveTicket(workspaceId, {'status': status}, ticketId: ticket.id);
       if (mounted) setState(() => _ticket = updated);
     } catch (error) {
       if (mounted) setState(() => _error = errorText(error));
@@ -223,10 +223,26 @@ class _TicketDetailPageState extends State<TicketDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const LoadingView();
-    if (_error != null && _ticket == null) return ErrorView(message: _error!, onRetry: _load);
+    if (_loading) {
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PageHeader(title: 'تیکت', description: 'جزئیات درخواست'),
+          Expanded(child: LoadingView()),
+        ],
+      );
+    }
+    if (_error != null && _ticket == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const PageHeader(title: 'تیکت', description: 'جزئیات درخواست'),
+          Expanded(child: ErrorView(message: _error!, onRetry: _load)),
+        ],
+      );
+    }
     final ticket = _ticket!;
-    final canEdit = context.watch<SessionController>().permissions.canEditTickets;
+    final canEdit = context.watch<SessionBloc>().permissions.canEditTickets;
     return Column(
       children: [
         PageHeader(title: ticket.subject, description: '${faLabel(ticketStatusLabels, ticket.status)} · ${ticket.customerName}'),

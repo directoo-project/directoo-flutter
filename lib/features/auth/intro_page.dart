@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../state/session.dart';
+import '../../presentation/session/session_bloc.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/brand.dart';
 
@@ -42,7 +42,7 @@ class _IntroPageState extends State<IntroPage> {
   }
 
   Future<void> _finish() async {
-    await context.read<SessionController>().completeIntro();
+    await context.read<SessionBloc>().completeIntro();
     if (mounted) context.go('/login');
   }
 

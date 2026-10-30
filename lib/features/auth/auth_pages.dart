@@ -3,15 +3,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api_exception.dart';
 import '../../core/format.dart';
 import '../../core/labels.dart';
-import '../../data/directoo_api.dart';
-import '../../models/models.dart';
-import '../../state/session.dart';
+import '../../domain/repositories/instagram_repository.dart';
+import '../../domain/repositories/knowledge_repository.dart';
+import '../../domain/entities/models.dart';
+import '../../presentation/session/session_bloc.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/brand.dart';
 import '../../widgets/ui.dart';
@@ -46,7 +47,7 @@ class _LoginPageState extends State<LoginPage> {
       _error = null;
     });
     try {
-      await context.read<SessionController>().sendOtp(phone);
+      await context.read<SessionBloc>().sendOtp(phone);
       if (mounted) context.go('/otp');
     } catch (error) {
       if (mounted) setState(() => _error = errorText(error));
@@ -62,8 +63,9 @@ class _LoginPageState extends State<LoginPage> {
       child: AuthCard(
         title: 'ورود',
         titleWidget: Text.rich(
+          textAlign: TextAlign.center,
           TextSpan(
-            style: TextStyle(fontSize: 30, height: 1.4, fontWeight: FontWeight.w800, color: dt.text),
+            style: TextStyle(fontSize: 28, height: 1.4, fontWeight: FontWeight.w800, color: dt.text),
             children: const [
               TextSpan(text: 'ورود به '),
               TextSpan(text: 'Directoo'),
@@ -81,10 +83,18 @@ class _LoginPageState extends State<LoginPage> {
               icon: Icons.smartphone_outlined,
               keyboardType: TextInputType.phone,
               textDirection: TextDirection.ltr,
+              hasError: _error != null,
               inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+]'))],
+              onChanged: (_) {
+                if (_error != null) setState(() => _error = null);
+              },
             ),
             const SizedBox(height: 8),
-            Text('برای ورود یا ساخت حساب، کد تأیید به این شماره پیامک می‌شود.', style: TextStyle(color: dt.textMuted, fontSize: 13, height: 1.6)),
+            Text(
+              'برای ورود یا ساخت حساب، کد تأیید به این شماره پیامک می‌شود.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: dt.textMuted, fontSize: 13, height: 1.7),
+            ),
             if (_error != null) ...[
               const SizedBox(height: 16),
               AuthError(_error!),
@@ -115,7 +125,7 @@ class _OtpPageState extends State<OtpPage> {
   @override
   void initState() {
     super.initState();
-    _left = context.read<SessionController>().otpExpiresIn;
+    _left = context.read<SessionBloc>().otpExpiresIn;
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       if (_left > 0) setState(() => _left -= 1);
@@ -136,7 +146,7 @@ class _OtpPageState extends State<OtpPage> {
       _error = null;
     });
     try {
-      await context.read<SessionController>().verifyOtp(code);
+      await context.read<SessionBloc>().verifyOtp(code);
     } catch (error) {
       if (mounted) setState(() => _error = errorText(error));
     } finally {
@@ -145,7 +155,7 @@ class _OtpPageState extends State<OtpPage> {
   }
 
   Future<void> _resend() async {
-    final session = context.read<SessionController>();
+    final session = context.read<SessionBloc>();
     final phone = session.pendingPhone;
     if (phone == null || _left > 0) return;
     try {
@@ -158,7 +168,7 @@ class _OtpPageState extends State<OtpPage> {
 
   @override
   Widget build(BuildContext context) {
-    final session = context.watch<SessionController>();
+    final session = context.watch<SessionBloc>();
     if (session.pendingPhone == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) context.go('/login');
@@ -167,20 +177,9 @@ class _OtpPageState extends State<OtpPage> {
     final minutes = (_left ~/ 60).toString().padLeft(2, '0');
     final seconds = (_left % 60).toString().padLeft(2, '0');
     final masked = session.maskedPhone ?? session.pendingPhone ?? '';
+    final dt = context.dt;
     return AuthScaffold(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: TextButton.icon(
-              onPressed: () => context.go('/login'),
-              style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 0)),
-              icon: const Icon(Icons.arrow_forward, size: 18),
-              label: const Text('تغییر شماره موبایل'),
-            ),
-          ),
-          AuthCard(
+      child: AuthCard(
         title: 'کد تأیید را وارد کنید',
         description: 'کد تأیید به شماره $masked ارسال شد و تا ۲ دقیقه معتبر است.',
         child: Column(
@@ -188,8 +187,10 @@ class _OtpPageState extends State<OtpPage> {
           children: [
             _OtpBoxes(
               value: _otp.text,
+              hasError: _error != null,
               onChanged: (value) {
                 _otp.text = value;
+                if (_error != null) _error = null;
                 if (value.length == 6) _verify(value);
                 setState(() {});
               },
@@ -203,17 +204,29 @@ class _OtpPageState extends State<OtpPage> {
               onPressed: _loading || _otp.text.length != 6 ? null : () => _verify(_otp.text),
               label: _loading ? 'در حال تأیید...' : 'تأیید و ورود',
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(child: Text('ارسال مجدد تا ${faDigits('$minutes:$seconds')}', style: TextStyle(color: context.dt.textMuted, fontSize: 14))),
-                TextButton(onPressed: _left == 0 ? _resend : null, child: const Text('ارسال مجدد کد')),
-              ],
+            const SizedBox(height: 16),
+            Text('ارسال مجدد تا ${faDigits('$minutes:$seconds')}', textAlign: TextAlign.center, style: TextStyle(color: dt.textMuted, fontSize: 14)),
+            Center(
+              child: TextButton(
+                onPressed: _left == 0 ? _resend : null,
+                child: const Text('ارسال مجدد کد'),
+              ),
+            ),
+            Center(
+              child: TextButton(
+                onPressed: () => context.go('/login'),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('تغییر شماره موبایل'),
+                    SizedBox(width: 6),
+                    Icon(Icons.edit_outlined, size: 16),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
-          ),
-        ],
       ),
     );
   }
@@ -236,7 +249,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   @override
   void initState() {
     super.initState();
-    final user = context.read<SessionController>().user;
+    final user = context.read<SessionBloc>().user;
     _first = TextEditingController(text: user?.firstName ?? '');
     _last = TextEditingController(text: user?.lastName ?? '');
     _email = TextEditingController(text: user?.email ?? '');
@@ -260,7 +273,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
       _error = null;
     });
     try {
-      await context.read<SessionController>().completeProfile(
+      await context.read<SessionBloc>().completeProfile(
             firstName: _first.text.trim(),
             lastName: _last.text.trim(),
             email: _email.text.trim(),
@@ -274,7 +287,9 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
 
   @override
   Widget build(BuildContext context) {
-    final phone = context.watch<SessionController>().user?.phoneNumber ?? '';
+    final dt = context.dt;
+    final phone = context.watch<SessionBloc>().user?.phoneNumber ?? '';
+    final missing = _error != null;
     return AuthScaffold(
       child: AuthCard(
         title: 'تکمیل پروفایل',
@@ -282,25 +297,50 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TextField(controller: _first, decoration: const InputDecoration(labelText: 'نام')),
-            const SizedBox(height: 12),
-            TextField(controller: _last, decoration: const InputDecoration(labelText: 'نام خانوادگی')),
-            const SizedBox(height: 12),
-            TextField(controller: _email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'ایمیل (اختیاری)')),
-            const SizedBox(height: 12),
-            InputDecorator(
-              decoration: const InputDecoration(labelText: 'شماره موبایل'),
-              child: Text(phone, textDirection: TextDirection.ltr),
+            const AuthLabel('نام'),
+            AuthField(controller: _first, hint: 'کاربر', hasError: missing && _first.text.trim().isEmpty),
+            const SizedBox(height: 14),
+            const AuthLabel('نام خانوادگی'),
+            AuthField(controller: _last, hint: 'نمونه', hasError: missing && _last.text.trim().isEmpty),
+            const SizedBox(height: 14),
+            const AuthLabel('ایمیل (اختیاری)'),
+            AuthField(
+              controller: _email,
+              hint: 'user@example.com',
+              keyboardType: TextInputType.emailAddress,
+              textDirection: TextDirection.ltr,
+            ),
+            const SizedBox(height: 14),
+            const AuthLabel('شماره موبایل'),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+              decoration: BoxDecoration(
+                color: dt.surfaceMuted,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: dt.border),
+              ),
+              child: Text(
+                phone.isEmpty ? '—' : faDigits(phone),
+                textDirection: TextDirection.ltr,
+                textAlign: TextAlign.left,
+                style: TextStyle(color: dt.textMuted, fontWeight: FontWeight.w600, fontSize: 16),
+              ),
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(_error!, style: TextStyle(color: context.dt.error)),
+              Text(_error!, textAlign: TextAlign.center, style: TextStyle(color: dt.error, fontWeight: FontWeight.w600)),
             ],
             const SizedBox(height: 16),
-            FilledButton(onPressed: _loading ? null : _save, child: Text(_loading ? 'در حال ذخیره...' : 'ادامه')),
-            TextButton(
-              onPressed: _loading ? null : () => context.read<SessionController>().skipProfile(),
-              child: const Text('بعداً'),
+            AuthPrimaryButton(onPressed: _loading ? null : _save, label: _loading ? 'در حال ذخیره...' : 'ادامه'),
+            Center(
+              child: TextButton(
+                onPressed: () {
+                  if (_loading) return;
+                  context.read<SessionBloc>().skipProfile();
+                },
+                child: const Text('بعداً'),
+              ),
             ),
           ],
         ),
@@ -356,7 +396,7 @@ class _KnowledgeSetupPageState extends State<KnowledgeSetupPage> {
   }
 
   Future<void> _load() async {
-    final session = context.read<SessionController>();
+    final session = context.read<SessionBloc>();
     final id = session.workspace?.id;
     if (id == null) {
       setState(() {
@@ -365,7 +405,7 @@ class _KnowledgeSetupPageState extends State<KnowledgeSetupPage> {
       });
       return;
     }
-    final api = context.read<DirectooApi>();
+    final api = context.read<KnowledgeRepository>();
     try {
       final business = await api.business(id);
       final rules = await api.rules(id);
@@ -391,7 +431,7 @@ class _KnowledgeSetupPageState extends State<KnowledgeSetupPage> {
   Future<bool> _persist() async {
     final id = _workspaceId;
     if (id == null) return false;
-    final api = context.read<DirectooApi>();
+    final api = context.read<KnowledgeRepository>();
     setState(() {
       _saving = true;
       _error = null;
@@ -435,7 +475,7 @@ class _KnowledgeSetupPageState extends State<KnowledgeSetupPage> {
     final ok = await _persist();
     if (!ok || !mounted) return;
     if (_step == _titles.length - 1) {
-      await context.read<SessionController>().finishKnowledge();
+      await context.read<SessionBloc>().finishKnowledge();
       return;
     }
     setState(() => _step += 1);
@@ -453,11 +493,13 @@ class _KnowledgeSetupPageState extends State<KnowledgeSetupPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const PageHeader(title: 'سؤال متداول', description: 'سؤال و پاسخ را بنویسید'),
-          TextField(controller: question, decoration: const InputDecoration(labelText: 'سؤال')),
+          const AuthLabel('سؤال'),
+          AuthField(controller: question, hint: 'سؤال'),
           const SizedBox(height: 12),
-          TextField(controller: answer, minLines: 3, maxLines: 5, decoration: const InputDecoration(labelText: 'پاسخ')),
+          const AuthLabel('پاسخ'),
+          AuthField(controller: answer, hint: 'پاسخ', minLines: 3, maxLines: 5),
           const SizedBox(height: 16),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('افزودن')),
+          AuthPrimaryButton(onPressed: () => Navigator.pop(context, true), label: 'افزودن'),
         ],
       ),
     );
@@ -468,7 +510,7 @@ class _KnowledgeSetupPageState extends State<KnowledgeSetupPage> {
     if (ok != true || !mounted || q.isEmpty || a.isEmpty) return;
     setState(() => _saving = true);
     try {
-      final created = await context.read<DirectooApi>().saveFaq(id, question: q, answer: a);
+      final created = await context.read<KnowledgeRepository>().saveFaq(id, question: q, answer: a);
       _faqs = [..._faqs, created];
     } catch (error) {
       _error = errorText(error);
@@ -479,9 +521,9 @@ class _KnowledgeSetupPageState extends State<KnowledgeSetupPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return const AuthScaffold(child: Center(child: CircularProgressIndicator()));
-    }
+    if (_loading) return const AuthScaffold(child: _SetupSkeleton());
+    final dt = context.dt;
+    final nameInvalid = _error == 'نام کسب‌وکار را وارد کنید.';
     return AuthScaffold(
       child: AuthCard(
         title: _titles[_step],
@@ -489,43 +531,90 @@ class _KnowledgeSetupPageState extends State<KnowledgeSetupPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            _StepBars(step: _step, total: _titles.length),
+            const SizedBox(height: 18),
             if (_step == 0) ...[
-              TextField(controller: _name, decoration: const InputDecoration(labelText: 'نام کسب‌وکار')),
-              const SizedBox(height: 12),
+              const AuthLabel('نام کسب‌وکار'),
+              AuthField(controller: _name, hint: 'نام کسب‌وکار', hasError: nameInvalid),
+              const SizedBox(height: 14),
+              const AuthLabel('حوزه فعالیت'),
               DropdownButtonFormField<String>(
                 initialValue: _industry.isEmpty ? null : _industry,
-                decoration: const InputDecoration(labelText: 'حوزه فعالیت'),
+                hint: const Text('انتخاب کنید'),
+                decoration: const InputDecoration(),
                 items: [for (final entry in industryLabels.entries) DropdownMenuItem(value: entry.key, child: Text(entry.value))],
-                onChanged: (value) => setState(() => _industry = value ?? ''),
+                onChanged: _saving ? null : (value) => setState(() => _industry = value ?? ''),
               ),
             ],
             if (_step == 1) ...[
-              TextField(controller: _about, minLines: 3, maxLines: 5, decoration: const InputDecoration(labelText: 'درباره کسب‌وکار')),
-              const SizedBox(height: 12),
-              TextField(controller: _phone, decoration: const InputDecoration(labelText: 'تلفن')),
+              const AuthLabel('درباره کسب‌وکار'),
+              AuthField(controller: _about, hint: 'درباره کسب‌وکار', minLines: 3, maxLines: 5),
+              const SizedBox(height: 14),
+              const AuthLabel('تلفن'),
+              AuthField(controller: _phone, hint: 'تلفن'),
             ],
             if (_step == 2) ...[
-              TextField(controller: _address, decoration: const InputDecoration(labelText: 'آدرس')),
-              const SizedBox(height: 12),
-              TextField(controller: _hours, decoration: const InputDecoration(labelText: 'ساعات پاسخ‌گویی')),
+              const AuthLabel('آدرس'),
+              AuthField(controller: _address, hint: 'آدرس'),
+              const SizedBox(height: 14),
+              const AuthLabel('ساعات پاسخ‌گویی'),
+              AuthField(controller: _hours, hint: 'ساعات پاسخ‌گویی'),
             ],
             if (_step == 3) ...[
-              TextField(controller: _allowed, minLines: 2, maxLines: 4, decoration: const InputDecoration(labelText: 'موضوعات مجاز')),
-              const SizedBox(height: 12),
-              TextField(controller: _forbidden, minLines: 2, maxLines: 4, decoration: const InputDecoration(labelText: 'موضوعات ممنوع')),
+              const AuthLabel('موضوعات مجاز'),
+              AuthField(controller: _allowed, hint: 'موضوعات مجاز', minLines: 3, maxLines: 5),
+              const SizedBox(height: 14),
+              const AuthLabel('موضوعات ممنوع'),
+              AuthField(controller: _forbidden, hint: 'موضوعات ممنوع', minLines: 3, maxLines: 5),
             ],
             if (_step == 4) ...[
-              for (final faq in _faqs)
-                ListTile(contentPadding: EdgeInsets.zero, title: Text(faq.question), subtitle: Text(faq.answer)),
+              for (final faq in _faqs) ...[
+                SurfaceCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(faq.question, style: const TextStyle(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 4),
+                      Text(faq.answer, style: TextStyle(color: dt.textMuted)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
               Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: OutlinedButton.icon(onPressed: _saving ? null : _addFaq, icon: const Icon(Icons.add), label: const Text('افزودن سؤال')),
+                alignment: AlignmentDirectional.centerEnd,
+                child: OutlinedButton(
+                  onPressed: _addFaq,
+                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44), padding: const EdgeInsets.symmetric(horizontal: 16)),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('افزودن سؤال'),
+                      SizedBox(width: 6),
+                      Icon(Icons.add, size: 18),
+                    ],
+                  ),
+                ),
               ),
             ],
-            if (_error != null) Text(_error!, style: TextStyle(color: context.dt.error)),
-            const SizedBox(height: 12),
-            FilledButton(onPressed: _saving ? null : _next, child: Text(_saving ? 'در حال ذخیره...' : (_step == 4 ? 'پایان و ادامه' : 'بعدی'))),
-            TextButton(onPressed: _saving ? null : () => context.read<SessionController>().skipKnowledge(), child: const Text('رد کردن')),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(_error!, textAlign: TextAlign.center, style: TextStyle(color: dt.error, fontWeight: FontWeight.w600)),
+            ],
+            const SizedBox(height: 16),
+            AuthPrimaryButton(
+              onPressed: _saving ? null : _next,
+              label: _saving ? 'در حال ذخیره...' : (_step == 4 ? 'پایان و ادامه' : 'بعدی'),
+            ),
+            Center(
+              child: TextButton(
+                onPressed: () {
+                  if (_saving) return;
+                  context.read<SessionBloc>().skipKnowledge();
+                },
+                child: const Text('رد کردن'),
+              ),
+            ),
           ],
         ),
       ),
@@ -559,7 +648,7 @@ class _InstagramSetupPageState extends State<InstagramSetupPage> {
   }
 
   Future<void> _load() async {
-    final session = context.read<SessionController>();
+    final session = context.read<SessionBloc>();
     final id = session.workspace?.id;
     if (id == null) {
       setState(() {
@@ -569,15 +658,14 @@ class _InstagramSetupPageState extends State<InstagramSetupPage> {
       return;
     }
     try {
-      final existing = await context.read<DirectooApi>().accessRequest(id);
+      final existing = await context.read<InstagramRepository>().accessRequest(id);
       if (!mounted) return;
       if (existing?.status == 'approved') {
         await session.clearInstagramPending();
         return;
       }
       if (existing != null && existing.reviewing) {
-        session.instagramReviewing = true;
-        session.publish();
+        await session.markInstagramReviewing();
         return;
       }
       if (existing != null) _username.text = existing.username;
@@ -589,7 +677,7 @@ class _InstagramSetupPageState extends State<InstagramSetupPage> {
   }
 
   Future<void> _submit() async {
-    final id = context.read<SessionController>().workspace?.id;
+    final id = context.read<SessionBloc>().workspace?.id;
     if (id == null) return;
     final username = normalizeInstagramUsername(_username.text);
     if (!isValidInstagramUsername(username)) {
@@ -601,8 +689,8 @@ class _InstagramSetupPageState extends State<InstagramSetupPage> {
       _error = null;
     });
     try {
-      await context.read<DirectooApi>().submitAccessRequest(id, username);
-      if (mounted) await context.read<SessionController>().clearInstagramPending();
+      await context.read<InstagramRepository>().submitAccessRequest(id, username);
+      if (mounted) await context.read<SessionBloc>().clearInstagramPending();
     } catch (error) {
       if (mounted) setState(() => _error = errorText(error));
     } finally {
@@ -612,7 +700,9 @@ class _InstagramSetupPageState extends State<InstagramSetupPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const AuthScaffold(child: Center(child: CircularProgressIndicator()));
+    if (_loading) return const AuthScaffold(child: _SetupSkeleton(compact: true));
+    final dt = context.dt;
+    final invalid = _error == 'یوزرنیم اینستاگرام را درست وارد کنید.';
     return AuthScaffold(
       child: AuthCard(
         title: 'یوزرنیم اینستاگرام',
@@ -620,18 +710,29 @@ class _InstagramSetupPageState extends State<InstagramSetupPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TextField(
+            const AuthLabel('نام کاربری اینستاگرام'),
+            AuthField(
               controller: _username,
+              hint: 'username',
+              prefixText: '@',
               textDirection: TextDirection.ltr,
-              decoration: const InputDecoration(labelText: 'نام کاربری اینستاگرام', prefixText: '@'),
+              hasError: invalid,
             ),
             if (_error != null) ...[
-              const SizedBox(height: 8),
-              Text(_error!, style: TextStyle(color: context.dt.error)),
+              const SizedBox(height: 12),
+              Text(_error!, textAlign: TextAlign.center, style: TextStyle(color: dt.error, fontWeight: FontWeight.w600)),
             ],
             const SizedBox(height: 16),
-            FilledButton(onPressed: _saving ? null : _submit, child: Text(_saving ? 'در حال ثبت...' : 'ثبت و ادامه')),
-            TextButton(onPressed: _saving ? null : () => context.read<SessionController>().clearInstagramPending(), child: const Text('بعداً')),
+            AuthPrimaryButton(onPressed: _saving ? null : _submit, label: _saving ? 'در حال ثبت...' : 'ثبت و ادامه'),
+            Center(
+              child: TextButton(
+                onPressed: () {
+                  if (_saving) return;
+                  context.read<SessionBloc>().clearInstagramPending();
+                },
+                child: const Text('بعداً'),
+              ),
+            ),
           ],
         ),
       ),
@@ -659,13 +760,13 @@ class _InstagramPendingPageState extends State<InstagramPendingPage> {
   }
 
   Future<void> _load() async {
-    final id = context.read<SessionController>().workspace?.id;
+    final id = context.read<SessionBloc>().workspace?.id;
     if (id == null) {
       setState(() => _loading = false);
       return;
     }
     try {
-      _request = await context.read<DirectooApi>().accessRequest(id);
+      _request = await context.read<InstagramRepository>().accessRequest(id);
     } catch (error) {
       _error = errorText(error);
     } finally {
@@ -674,12 +775,12 @@ class _InstagramPendingPageState extends State<InstagramPendingPage> {
   }
 
   Future<void> _confirm() async {
-    final id = context.read<SessionController>().workspace?.id;
+    final id = context.read<SessionBloc>().workspace?.id;
     if (id == null) return;
     setState(() => _saving = true);
     try {
-      await context.read<DirectooApi>().confirmFacebook(id);
-      if (mounted) await context.read<SessionController>().clearInstagramPending();
+      await context.read<InstagramRepository>().confirmFacebook(id);
+      if (mounted) await context.read<SessionBloc>().clearInstagramPending();
     } catch (error) {
       if (mounted) setState(() => _error = errorText(error));
     } finally {
@@ -689,38 +790,63 @@ class _InstagramPendingPageState extends State<InstagramPendingPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const AuthScaffold(child: Center(child: CircularProgressIndicator()));
+    if (_loading) return const AuthScaffold(child: _SetupSkeleton(compact: true));
+    final dt = context.dt;
+    final approved = _request?.status == 'approved';
     final awaiting = _request?.status == 'awaiting_facebook';
     final link = _request?.facebookLink ?? '';
+    final username = _request?.username ?? '';
     return AuthScaffold(
       child: AuthCard(
-        title: awaiting ? 'منتظر تایید شما در فیسبوک' : 'در حال بررسی',
-        description: awaiting ? 'وارد لینک شوید و در تب آخر دایرکتو را تأیید کنید.' : 'درخواست اتصال اینستاگرام شما ثبت شد.',
+        title: approved ? 'اینستاگرام وصل شد' : (awaiting ? 'منتظر تأیید شما در فیسبوک' : 'در حال بررسی'),
+        description: approved
+            ? 'درخواست اتصال اینستاگرام شما تأیید شد.'
+            : (awaiting ? 'وارد لینک شوید و در تب آخر دایرکتو را تأیید کنید.' : 'درخواست اتصال اینستاگرام شما ثبت شد.'),
+        eyebrow: approved
+            ? Center(
+                child: Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(color: dt.success.withValues(alpha: 0.12), shape: BoxShape.circle),
+                  child: Icon(Icons.check_rounded, color: dt.success, size: 32),
+                ),
+              )
+            : null,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if ((_request?.username ?? '').isNotEmpty)
-              Text('@${_request!.username}', textAlign: TextAlign.center, textDirection: TextDirection.ltr, style: const TextStyle(fontWeight: FontWeight.w800)),
+            if (username.isNotEmpty)
+              Text('@$username', textAlign: TextAlign.center, textDirection: TextDirection.ltr, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
             const SizedBox(height: 12),
+            Text(
+              approved
+                  ? 'حالا می‌توانید دایرکت‌ها را از داشبورد مدیریت کنید.'
+                  : (awaiting
+                      ? 'روی «وارد شود» بزنید و در تب آخر دایرکتو را تأیید کنید. بعد از آن «تایید کردم» را بزنید.'
+                      : 'یوزرنیم اینستاگرام شما دریافت شد و کمتر از ۱۰ دقیقه بررسی می‌شود.'),
+              textAlign: TextAlign.center,
+              style: TextStyle(color: dt.textMuted, height: 1.7),
+            ),
             if (awaiting) ...[
-              const Text('روی «وارد شود» بزنید و در تب آخر دایرکتو را تأیید کنید. بعد از آن «تایید کردم» را بزنید.'),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               if (link.isEmpty)
-                const Text('لینک فیسبوک هنوز ثبت نشده است. کمی بعد دوباره این صفحه را باز کنید.')
+                Text('لینک فیسبوک هنوز ثبت نشده است. کمی بعد دوباره این صفحه را باز کنید.', textAlign: TextAlign.center, style: TextStyle(color: dt.textMuted))
               else
-                FilledButton(
+                AuthPrimaryButton(
                   onPressed: () => launchUrl(Uri.parse(link), mode: LaunchMode.externalApplication),
-                  child: const Text('وارد شود'),
+                  label: 'وارد شود',
                 ),
               const SizedBox(height: 8),
               OutlinedButton(onPressed: _saving || link.isEmpty ? null : _confirm, child: Text(_saving ? 'در حال ثبت...' : 'تایید کردم')),
-            ] else
-              const Text('یوزرنیم اینستاگرام شما دریافت شد و کمتر از ۱۰ دقیقه بررسی می‌شود.'),
-            if (_error != null) Text(_error!, style: TextStyle(color: context.dt.error)),
-            const SizedBox(height: 12),
-            FilledButton(
-              onPressed: () => context.read<SessionController>().clearInstagramPending(),
-              child: const Text('ورود به داشبورد'),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(_error!, textAlign: TextAlign.center, style: TextStyle(color: dt.error, fontWeight: FontWeight.w600)),
+            ],
+            const SizedBox(height: 16),
+            AuthPrimaryButton(
+              onPressed: () => context.read<SessionBloc>().clearInstagramPending(),
+              label: 'ورود به داشبورد',
             ),
           ],
         ),
@@ -730,10 +856,11 @@ class _InstagramPendingPageState extends State<InstagramPendingPage> {
 }
 
 class _OtpBoxes extends StatefulWidget {
-  const _OtpBoxes({required this.value, required this.onChanged});
+  const _OtpBoxes({required this.value, required this.onChanged, this.hasError = false});
 
   final String value;
   final ValueChanged<String> onChanged;
+  final bool hasError;
 
   @override
   State<_OtpBoxes> createState() => _OtpBoxesState();
@@ -781,7 +908,10 @@ class _OtpBoxesState extends State<_OtpBoxes> {
                     decoration: BoxDecoration(
                       color: dt.surface,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: i == value.length ? dt.primary : const Color(0xFFCDD2E2), width: i == value.length ? 1.5 : 1),
+                      border: Border.all(
+                        color: widget.hasError ? dt.error : (i == value.length ? dt.primary : const Color(0xFFCDD2E2)),
+                        width: widget.hasError || i == value.length ? 1.5 : 1,
+                      ),
                     ),
                     child: Text(i < value.length ? faDigits(value[i]) : '', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: dt.text)),
                   ),
@@ -809,22 +939,81 @@ class _OtpBoxesState extends State<_OtpBoxes> {
   }
 }
 
+class _StepBars extends StatelessWidget {
+  const _StepBars({required this.step, required this.total});
+
+  final int step;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    final dt = context.dt;
+    return Row(
+      children: [
+        for (var i = 0; i < total; i++)
+          Expanded(
+            child: Container(
+              height: 4,
+              margin: EdgeInsetsDirectional.only(start: i == 0 ? 0 : 6),
+              decoration: BoxDecoration(
+                color: i <= step ? dt.primary : dt.border,
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _SetupSkeleton extends StatelessWidget {
+  const _SetupSkeleton({this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Center(child: SkeletonBox(width: 180, height: 28, radius: 10)),
+        const SizedBox(height: 12),
+        const Center(child: SkeletonBox(width: 240, height: 14, radius: 8)),
+        const SizedBox(height: 28),
+        const Align(alignment: AlignmentDirectional.centerStart, child: SkeletonBox(width: 96, height: 12, radius: 8)),
+        const SizedBox(height: 8),
+        const SkeletonBox(height: 52, radius: 14),
+        if (!compact) ...[
+          const SizedBox(height: 16),
+          const Align(alignment: AlignmentDirectional.centerStart, child: SkeletonBox(width: 80, height: 12, radius: 8)),
+          const SizedBox(height: 8),
+          const SkeletonBox(height: 52, radius: 14),
+        ],
+        const SizedBox(height: 20),
+        const SkeletonBox(height: 52, radius: 14),
+        const SizedBox(height: 16),
+        const Center(child: SkeletonBox(width: 72, height: 16, radius: 8)),
+      ],
+    );
+  }
+}
+
 class BootPage extends StatelessWidget {
   const BootPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final session = context.watch<SessionController>();
+    final session = context.watch<SessionBloc>();
     final dt = context.dt;
     return Scaffold(
-      backgroundColor: dt.surface,
+      backgroundColor: dt.bgSubtle,
       body: SafeArea(
         child: session.bootError == null
             ? const Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    BrandLogo(height: 52),
+                    BrandSymbol(size: 56),
                     SizedBox(height: 28),
                     SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 2.4)),
                   ],
@@ -836,11 +1025,30 @@ class BootPage extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const BrandLogo(height: 44),
-                      const SizedBox(height: 24),
-                      Text(session.bootError!, textAlign: TextAlign.center, style: TextStyle(color: dt.textMuted, height: 1.7)),
+                      const BrandSymbol(size: 56),
+                      const SizedBox(height: 20),
+                      Text(
+                        session.bootError!,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: dt.error, fontWeight: FontWeight.w700, height: 1.7),
+                      ),
                       const SizedBox(height: 16),
-                      FilledButton(onPressed: session.bootstrap, child: const Text('تلاش مجدد')),
+                      FilledButton(
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(0, 48),
+                          padding: const EdgeInsets.symmetric(horizontal: 22),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: session.bootstrap,
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('تلاش مجدد'),
+                            SizedBox(width: 8),
+                            Icon(Icons.refresh, size: 18),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),

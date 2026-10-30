@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import 'api_exception.dart';
 import 'config.dart';
+import 'logging/app_log.dart';
 import 'token_store.dart';
 
 class ApiClient {
@@ -52,6 +53,7 @@ class ApiClient {
         },
       ),
     );
+    dio.interceptors.add(_DioLog());
   }
 
   final TokenStore tokens;
@@ -67,7 +69,9 @@ class ApiClient {
     final refresh = tokens.refresh;
     if (refresh == null || refresh.isEmpty) return false;
     try {
-      final response = await Dio(BaseOptions(baseUrl: apiBase)).post<Map<String, dynamic>>(
+      final refreshDio = Dio(BaseOptions(baseUrl: apiBase));
+      refreshDio.interceptors.add(_DioLog(logBody: false));
+      final response = await refreshDio.post<Map<String, dynamic>>(
         '/api/v1/auth/token/refresh/',
         data: {'refresh': refresh},
       );
@@ -139,5 +143,38 @@ class ApiClient {
     }
     if (status == 401) return ApiException('نشست شما منقضی شده است.', status: status);
     return ApiException('خطایی رخ داد.', status: status);
+  }
+}
+
+class _DioLog extends Interceptor {
+  _DioLog({this.logBody = true});
+
+  final bool logBody;
+
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    AppLog.dio('→ ${options.method} ${options.uri}');
+    if (logBody && options.data != null) AppLog.dio('  body ${_preview(options.data)}');
+    handler.next(options);
+  }
+
+  @override
+  void onResponse(Response<dynamic> response, ResponseInterceptorHandler handler) {
+    AppLog.dio('← ${response.statusCode} ${response.requestOptions.uri}');
+    if (logBody) AppLog.dio('  body ${_preview(response.data)}');
+    handler.next(response);
+  }
+
+  @override
+  void onError(DioException err, ErrorInterceptorHandler handler) {
+    AppLog.dio('✖ ${err.response?.statusCode ?? err.type.name} ${err.requestOptions.uri}');
+    handler.next(err);
+  }
+
+  String _preview(Object? data) {
+    if (data is FormData) return 'FormData';
+    final text = '$data';
+    if (text.length <= 500) return text;
+    return '${text.substring(0, 500)}…';
   }
 }

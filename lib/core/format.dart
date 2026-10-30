@@ -45,7 +45,7 @@ List<int> gregorianToJalali(int gy, int gm, int gd) {
   return [jy, jm, jd];
 }
 
-String formatJalali(String? iso, {bool withTime = true}) {
+String formatJalali(String? iso, {bool withTime = true, bool timeFirst = false}) {
   if (iso == null || iso.isEmpty) return '—';
   final date = DateTime.tryParse(iso)?.toLocal();
   if (date == null) return iso;
@@ -55,6 +55,7 @@ String formatJalali(String? iso, {bool withTime = true}) {
   if (!withTime) return faDigits(day);
   final clock =
       '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+  if (timeFirst) return faDigits('$clock $day');
   return faDigits('$day $clock');
 }
 

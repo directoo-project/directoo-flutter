@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/api_exception.dart';
 import '../../core/format.dart';
 import '../../core/labels.dart';
-import '../../data/directoo_api.dart';
-import '../../models/models.dart';
-import '../../state/session.dart';
+import '../../domain/repositories/customers_repository.dart';
+import '../../domain/entities/models.dart';
+import '../../presentation/session/session_bloc.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/ui.dart';
 
@@ -29,7 +29,7 @@ class _CustomersPageState extends State<CustomersPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     if (id != null && id != _loadedFor) {
       _loadedFor = id;
       _load();
@@ -50,7 +50,7 @@ class _CustomersPageState extends State<CustomersPage> {
       _error = null;
     });
     try {
-      final items = await context.read<DirectooApi>().customers(id, status: _status, search: _search.text.trim());
+      final items = await context.read<CustomersRepository>().customers(id, status: _status, search: _search.text.trim());
       if (mounted) setState(() => _items = items);
     } catch (error) {
       if (mounted) setState(() => _error = errorText(error));
@@ -61,7 +61,7 @@ class _CustomersPageState extends State<CustomersPage> {
 
   @override
   Widget build(BuildContext context) {
-    final canEdit = context.watch<SessionController>().permissions.canEditCustomers;
+    final canEdit = context.watch<SessionBloc>().permissions.canEditCustomers;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -153,10 +153,10 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
   }
 
   Future<void> _load() async {
-    final workspaceId = context.read<SessionController>().workspaceId;
+    final workspaceId = context.read<SessionBloc>().workspaceId;
     if (workspaceId == null) return;
     try {
-      final customer = await context.read<DirectooApi>().customer(workspaceId, widget.customerId!);
+      final customer = await context.read<CustomersRepository>().customer(workspaceId, widget.customerId!);
       _name.text = customer.name;
       _phone.text = customer.phone;
       _email.text = customer.email;
@@ -181,7 +181,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
   }
 
   Future<void> _save() async {
-    final workspaceId = context.read<SessionController>().workspaceId;
+    final workspaceId = context.read<SessionBloc>().workspaceId;
     if (workspaceId == null) return;
     if (_name.text.trim().isEmpty) {
       setState(() => _error = 'نام مشتری را وارد کنید.');
@@ -192,7 +192,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
       _error = null;
     });
     try {
-      await context.read<DirectooApi>().saveCustomer(
+      await context.read<CustomersRepository>().saveCustomer(
         workspaceId,
         {
           'name': _name.text.trim(),
@@ -276,11 +276,11 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
   }
 
   Future<void> _load() async {
-    final workspaceId = context.read<SessionController>().workspaceId;
+    final workspaceId = context.read<SessionBloc>().workspaceId;
     if (workspaceId == null) return;
     setState(() => _loading = true);
     try {
-      final customer = await context.read<DirectooApi>().customer(workspaceId, widget.id);
+      final customer = await context.read<CustomersRepository>().customer(workspaceId, widget.id);
       if (mounted) setState(() => _customer = customer);
     } catch (error) {
       if (mounted) setState(() => _error = errorText(error));
@@ -290,8 +290,8 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
   }
 
   Future<void> _delete() async {
-    final workspaceId = context.read<SessionController>().workspaceId;
-    final api = context.read<DirectooApi>();
+    final workspaceId = context.read<SessionBloc>().workspaceId;
+    final api = context.read<CustomersRepository>();
     if (workspaceId == null) return;
     if (!await confirmDelete(context, 'حذف مشتری؟')) return;
     if (!mounted) return;
@@ -302,10 +302,26 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const LoadingView();
-    if (_error != null) return ErrorView(message: _error!, onRetry: _load);
+    if (_loading) {
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PageHeader(title: 'مشتری', description: 'جزئیات مشتری'),
+          Expanded(child: LoadingView()),
+        ],
+      );
+    }
+    if (_error != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const PageHeader(title: 'مشتری', description: 'جزئیات مشتری'),
+          Expanded(child: ErrorView(message: _error!, onRetry: _load)),
+        ],
+      );
+    }
     final customer = _customer!;
-    final permissions = context.watch<SessionController>().permissions;
+    final permissions = context.watch<SessionBloc>().permissions;
     return ListView(
       children: [
         PageHeader(

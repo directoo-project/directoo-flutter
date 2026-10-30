@@ -21,7 +21,10 @@ class AuthScaffold extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Align(alignment: AlignmentDirectional.centerStart, child: BrandLogo(height: 36)),
+              Align(
+                alignment: wide ? AlignmentDirectional.centerStart : Alignment.center,
+                child: const BrandLogo(height: 36),
+              ),
               SizedBox(height: wide ? 48 : 32),
               Expanded(
                 child: Align(
@@ -243,11 +246,12 @@ class _Check extends StatelessWidget {
 }
 
 class AuthCard extends StatelessWidget {
-  const AuthCard({super.key, required this.title, this.titleWidget, this.description, required this.child});
+  const AuthCard({super.key, required this.title, this.titleWidget, this.description, this.eyebrow, required this.child});
 
   final String title;
   final Widget? titleWidget;
   final String? description;
+  final Widget? eyebrow;
   final Widget child;
 
   @override
@@ -256,10 +260,11 @@ class AuthCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        titleWidget ?? Text(title, style: TextStyle(fontSize: 30, height: 1.4, fontWeight: FontWeight.w800, color: dt.text)),
+        if (eyebrow != null) ...[eyebrow!, const SizedBox(height: 16)],
+        titleWidget ?? Text(title, textAlign: TextAlign.center, style: TextStyle(fontSize: 28, height: 1.4, fontWeight: FontWeight.w800, color: dt.text)),
         if (description != null) ...[
           const SizedBox(height: 8),
-          Text(description!, style: TextStyle(color: dt.textMuted, height: 1.9, fontSize: 15)),
+          Text(description!, textAlign: TextAlign.center, style: TextStyle(color: dt.textMuted, height: 1.8, fontSize: 15)),
         ],
         const SizedBox(height: 28),
         child,
@@ -292,6 +297,12 @@ class AuthField extends StatelessWidget {
     this.inputFormatters,
     this.textDirection,
     this.onChanged,
+    this.hasError = false,
+    this.readOnly = false,
+    this.fillColor,
+    this.minLines = 1,
+    this.maxLines = 1,
+    this.prefixText,
   });
 
   final TextEditingController controller;
@@ -301,29 +312,43 @@ class AuthField extends StatelessWidget {
   final List<TextInputFormatter>? inputFormatters;
   final TextDirection? textDirection;
   final ValueChanged<String>? onChanged;
+  final bool hasError;
+  final bool readOnly;
+  final Color? fillColor;
+  final int minLines;
+  final int maxLines;
+  final String? prefixText;
 
   @override
   Widget build(BuildContext context) {
     final dt = context.dt;
+    final borderColor = hasError ? dt.error : const Color(0xFFCDD2E2);
+    final radius = BorderRadius.circular(14);
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
       textDirection: textDirection,
       onChanged: onChanged,
-      style: TextStyle(fontSize: 17, color: dt.text, fontWeight: FontWeight.w600),
+      readOnly: readOnly,
+      minLines: minLines,
+      maxLines: maxLines,
+      style: TextStyle(fontSize: 16, color: readOnly ? dt.textMuted : dt.text, fontWeight: FontWeight.w600),
       decoration: InputDecoration(
         hintText: hint,
+        prefixText: prefixText,
         prefixIcon: icon == null ? null : Icon(icon, color: dt.textSubtle, size: 20),
         filled: true,
-        fillColor: dt.surface,
+        fillColor: fillColor ?? dt.surface,
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-        hintStyle: TextStyle(color: dt.textSubtle, fontWeight: FontWeight.w500, fontSize: 17),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFCDD2E2))),
+        hintStyle: TextStyle(color: dt.textSubtle, fontWeight: FontWeight.w500, fontSize: 16),
+        prefixStyle: TextStyle(color: dt.text, fontWeight: FontWeight.w600, fontSize: 16),
+        enabledBorder: OutlineInputBorder(borderRadius: radius, borderSide: BorderSide(color: borderColor)),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: dt.primary, width: 1.5),
+          borderRadius: radius,
+          borderSide: BorderSide(color: hasError ? dt.error : dt.primary, width: 1.5),
         ),
+        disabledBorder: OutlineInputBorder(borderRadius: radius, borderSide: BorderSide(color: borderColor)),
       ),
     );
   }
@@ -345,9 +370,9 @@ class AuthError extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.warning_amber_rounded, color: Color(0xFFC53030), size: 20),
+          const Icon(Icons.cancel_outlined, color: Color(0xFFE5484D), size: 20),
           const SizedBox(width: 10),
-          Expanded(child: Text(message, style: const TextStyle(color: Color(0xFFC53030), height: 1.6, fontSize: 14))),
+          Expanded(child: Text(message, style: const TextStyle(color: Color(0xFFE5484D), height: 1.6, fontSize: 14, fontWeight: FontWeight.w600))),
         ],
       ),
     );

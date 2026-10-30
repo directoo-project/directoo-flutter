@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../theme/app_theme.dart';
 import 'brand.dart';
@@ -13,24 +14,44 @@ class PageHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dt = context.dt;
+    final showBack = !FormSheetScope.isSheet(context) && GoRouter.of(context).canPop();
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          if (showBack) ...[
+            IconButton(
+              tooltip: 'بازگشت',
+              visualDensity: VisualDensity.compact,
+              onPressed: () => context.pop(),
+              icon: const Icon(Icons.arrow_forward, textDirection: TextDirection.ltr),
+            ),
+            const SizedBox(width: 4),
+          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: dt.text, height: 1.3)),
+                Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: showBack ? 18 : 26, fontWeight: FontWeight.w800, color: dt.text, height: 1.3),
+                ),
                 if (description != null) ...[
-                  const SizedBox(height: 6),
-                  Text(description!, style: TextStyle(color: dt.textMuted, height: 1.6)),
+                  const SizedBox(height: 2),
+                  Text(
+                    description!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: dt.textMuted, height: 1.4, fontSize: showBack ? 13 : null),
+                  ),
                 ],
               ],
             ),
           ),
-          if (action != null) ...[const SizedBox(width: 12), action!],
+          if (action != null) ...[const SizedBox(width: 8), action!],
         ],
       ),
     );
@@ -96,12 +117,17 @@ class EmptyView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const BrandSymbol(size: 44),
-            const SizedBox(height: 12),
-            Text(title, style: TextStyle(fontWeight: FontWeight.w800, color: dt.text)),
+            Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(color: dt.primary50, borderRadius: BorderRadius.circular(28)),
+              child: const Center(child: BrandSymbol(size: 44)),
+            ),
+            const SizedBox(height: 16),
+            Text(title, textAlign: TextAlign.center, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: dt.text)),
             if (subtitle != null) ...[
-              const SizedBox(height: 6),
-              Text(subtitle!, textAlign: TextAlign.center, style: TextStyle(color: dt.textMuted)),
+              const SizedBox(height: 8),
+              Text(subtitle!, textAlign: TextAlign.center, style: TextStyle(color: dt.textMuted, height: 1.6)),
             ],
           ],
         ),
@@ -118,20 +144,60 @@ class ErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dt = context.dt;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(message, textAlign: TextAlign.center, style: TextStyle(color: context.dt.error)),
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(color: dt.error.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(22)),
+              child: Icon(Icons.warning_amber_rounded, color: dt.error, size: 32),
+            ),
+            const SizedBox(height: 16),
+            Text(message, textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: dt.text, height: 1.6)),
             if (onRetry != null) ...[
-              const SizedBox(height: 12),
-              FilledButton(onPressed: onRetry, child: const Text('تلاش مجدد')),
+              const SizedBox(height: 16),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 48),
+                  padding: const EdgeInsets.symmetric(horizontal: 22),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: onRetry,
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('تلاش مجدد'),
+                    SizedBox(width: 8),
+                    Icon(Icons.refresh, size: 18),
+                  ],
+                ),
+              ),
             ],
           ],
         ),
       ),
+    );
+  }
+}
+
+class SkeletonBox extends StatelessWidget {
+  const SkeletonBox({super.key, this.width, this.height = 16, this.radius = 12});
+
+  final double? width;
+  final double height;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(color: context.dt.surface, borderRadius: BorderRadius.circular(radius)),
     );
   }
 }

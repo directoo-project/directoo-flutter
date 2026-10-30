@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/api_exception.dart';
 import '../../core/format.dart';
 import '../../core/labels.dart';
-import '../../data/directoo_api.dart';
-import '../../models/models.dart';
-import '../../state/session.dart';
+import '../../domain/repositories/knowledge_repository.dart';
+import '../../domain/repositories/products_repository.dart';
+import '../../domain/repositories/workspace_repository.dart';
+import '../../domain/entities/models.dart';
+import '../../presentation/session/session_bloc.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/ui.dart';
 
@@ -27,7 +29,7 @@ class _ProductsPageState extends State<ProductsPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     if (id != null && id != _loadedFor) {
       _loadedFor = id;
       _load();
@@ -45,7 +47,7 @@ class _ProductsPageState extends State<ProductsPage> {
     if (id == null) return;
     setState(() => _loading = true);
     try {
-      final items = await context.read<DirectooApi>().products(id, search: _search.text.trim());
+      final items = await context.read<ProductsRepository>().products(id, search: _search.text.trim());
       if (mounted) {
         setState(() {
           _items = items;
@@ -103,10 +105,10 @@ class _ProductsPageState extends State<ProductsPage> {
       ),
     );
     if (saved != true || !mounted) return;
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     if (id == null || name.text.trim().isEmpty) return;
     try {
-      await context.read<DirectooApi>().saveProduct(id, {
+      await context.read<ProductsRepository>().saveProduct(id, {
         'name': name.text.trim(),
         'description': description.text.trim(),
         'price': int.tryParse(price.text) ?? 0,
@@ -123,8 +125,8 @@ class _ProductsPageState extends State<ProductsPage> {
   }
 
   Future<void> _delete(Product product) async {
-    final id = context.read<SessionController>().workspaceId;
-    final api = context.read<DirectooApi>();
+    final id = context.read<SessionBloc>().workspaceId;
+    final api = context.read<ProductsRepository>();
     if (id == null || !await confirmDelete(context, 'حذف محصول؟')) return;
     if (!mounted) return;
     await api.deleteProduct(id, product.id);
@@ -133,7 +135,7 @@ class _ProductsPageState extends State<ProductsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final canEdit = context.watch<SessionController>().permissions.canManageProducts;
+    final canEdit = context.watch<SessionBloc>().permissions.canManageProducts;
     return Column(
       children: [
         PageHeader(
@@ -222,10 +224,10 @@ class _StorefrontPageState extends State<StorefrontPage> {
   }
 
   Future<void> _load() async {
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     if (id == null) return;
     try {
-      final info = await context.read<DirectooApi>().business(id);
+      final info = await context.read<KnowledgeRepository>().business(id);
       _name.text = info.businessName;
       _industry = info.industry;
       _about.text = info.about;
@@ -240,7 +242,7 @@ class _StorefrontPageState extends State<StorefrontPage> {
   }
 
   Future<void> _toggle(bool value) async {
-    final session = context.read<SessionController>();
+    final session = context.read<SessionBloc>();
     final workspace = session.workspace;
     if (workspace == null) return;
     if (value && !workspace.features.enabled('storefront_enabled')) {
@@ -248,7 +250,7 @@ class _StorefrontPageState extends State<StorefrontPage> {
       return;
     }
     try {
-      await context.read<DirectooApi>().updateWorkspace(workspace.id, {'storefront_active': value});
+      await context.read<WorkspaceRepository>().updateWorkspace(workspace.id, {'storefront_active': value});
       await session.reloadWorkspaces();
       if (mounted) setState(() => _message = value ? 'فروشگاه عمومی فعال شد.' : 'فروشگاه عمومی غیرفعال شد.');
     } catch (error) {
@@ -257,11 +259,11 @@ class _StorefrontPageState extends State<StorefrontPage> {
   }
 
   Future<void> _save() async {
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     if (id == null) return;
     setState(() => _saving = true);
     try {
-      await context.read<DirectooApi>().updateBusiness(id, {
+      await context.read<KnowledgeRepository>().updateBusiness(id, {
         'business_name': _name.text.trim(),
         'industry': _industry,
         'about': _about.text.trim(),
@@ -279,8 +281,16 @@ class _StorefrontPageState extends State<StorefrontPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const LoadingView();
-    final workspace = context.watch<SessionController>().workspace;
+    if (_loading) {
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PageHeader(title: 'فروشگاه‌ساز', description: 'صفحه عمومی فروشگاه با محصولات و اطلاعات کسب‌وکار'),
+          Expanded(child: LoadingView()),
+        ],
+      );
+    }
+    final workspace = context.watch<SessionBloc>().workspace;
     final active = workspace?.storefrontActive ?? false;
     return ListView(
       children: [

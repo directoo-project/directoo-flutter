@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api_exception.dart';
 import '../../core/format.dart';
 import '../../core/labels.dart';
-import '../../data/directoo_api.dart';
-import '../../models/models.dart';
-import '../../state/session.dart';
+import '../../domain/repositories/billing_repository.dart';
+import '../../domain/repositories/instagram_repository.dart';
+import '../../domain/repositories/tutorials_repository.dart';
+import '../../domain/entities/models.dart';
+import '../../presentation/session/session_bloc.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/brand.dart';
 
@@ -62,13 +64,6 @@ const navSections = [
   ]),
 ];
 
-const mobileNav = [
-  NavItem(path: '/dashboard', label: 'داشبورد', icon: Icons.space_dashboard_outlined, exact: true),
-  NavItem(path: '/dashboard/customers', label: 'مشتریان', icon: Icons.people_outline, feature: 'customers_enabled'),
-  NavItem(path: '/dashboard/invoices', label: 'فاکتورها', icon: Icons.receipt_long_outlined, feature: 'customers_enabled'),
-  NavItem(path: '/dashboard/inbox', label: 'صندوق', icon: Icons.forum_outlined, feature: 'inbox_enabled'),
-];
-
 const _featurePaths = {
   '/dashboard/inbox': 'inbox_enabled',
   '/dashboard/comments': 'inbox_enabled',
@@ -110,6 +105,31 @@ String menuKey(String location) {
   return rest.isEmpty ? 'dashboard' : rest;
 }
 
+void openDashboardRoute(BuildContext context, String path) {
+  final current = GoRouterState.of(context).uri.path;
+  if (path == '/dashboard') {
+    if (current != '/dashboard') context.go('/dashboard');
+    return;
+  }
+  if (current == path) return;
+  context.push(path);
+}
+
+class DashboardPageFrame extends StatelessWidget {
+  const DashboardPageFrame({super.key, required this.location, required this.child});
+
+  final String location;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: context.dt.bgSubtle,
+      body: SafeArea(bottom: false, child: _ShellBody(location: location, child: child)),
+    );
+  }
+}
+
 class DashboardShell extends StatelessWidget {
   const DashboardShell({super.key, required this.location, required this.child});
 
@@ -139,7 +159,6 @@ class DashboardShell extends StatelessWidget {
           ),
         ],
       ),
-      bottomNavigationBar: wide ? null : _BottomNav(location: location),
     );
   }
 }
@@ -152,7 +171,7 @@ class _Sidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final session = context.watch<SessionController>();
+    final session = context.watch<SessionBloc>();
     final features = session.workspace?.features;
     final dt = context.dt;
     return Material(
@@ -175,14 +194,22 @@ class _Sidebar extends StatelessWidget {
                         final picked = await showModalBottomSheet<int>(
                           context: context,
                           useRootNavigator: true,
+                          backgroundColor: dt.surface,
+                          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
                           builder: (context) => SafeArea(
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                const SizedBox(height: 10),
+                                Container(width: 40, height: 4, decoration: BoxDecoration(color: dt.border, borderRadius: BorderRadius.circular(99))),
+                                const SizedBox(height: 8),
                                 for (final workspace in session.workspaces)
                                   ListTile(
-                                    title: Text(workspace.name),
-                                    trailing: workspace.id == session.workspaceId ? const Icon(Icons.check) : null,
+                                    leading: Icon(
+                                      Icons.check,
+                                      color: workspace.id == session.workspaceId ? dt.primary : Colors.transparent,
+                                    ),
+                                    title: Text(workspace.name, style: const TextStyle(fontWeight: FontWeight.w700)),
                                     onTap: () => Navigator.pop(context, workspace.id),
                                   ),
                               ],
@@ -225,8 +252,14 @@ class _Sidebar extends StatelessWidget {
                   for (final item in section.items)
                     if (features?.enabled(item.feature) ?? true)
                       _NavTile(item: item, active: _active(location, item), onTap: () {
+                        final router = GoRouter.of(context);
                         onNavigate?.call();
-                        context.go(item.path);
+                        if (item.path == '/dashboard') {
+                          if (location != '/dashboard') router.go('/dashboard');
+                          return;
+                        }
+                        if (location == item.path) return;
+                        router.push(item.path);
                       }),
                 ],
               ],
@@ -280,7 +313,7 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final session = context.watch<SessionController>();
+    final session = context.watch<SessionBloc>();
     final dt = context.dt;
     final workspace = session.workspace;
     return Material(
@@ -322,7 +355,7 @@ class _TopBar extends StatelessWidget {
               if (session.permissions.canReply || (workspace?.features.enabled('tickets_enabled') ?? true))
                 IconButton(
                   tooltip: 'تیکت‌ها',
-                  onPressed: () => context.go('/dashboard/tickets'),
+                  onPressed: () => openDashboardRoute(context, '/dashboard/tickets'),
                   icon: const Icon(Icons.confirmation_number_outlined),
                 ),
               if (wide) const _WalletChip(),
@@ -355,10 +388,10 @@ class _WalletChipState extends State<_WalletChip> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     if (id != null && id != _loadedFor) {
       _loadedFor = id;
-      context.read<DirectooApi>().wallet(id).then((wallet) {
+      context.read<BillingRepository>().wallet(id).then((wallet) {
         if (mounted) setState(() => _balance = wallet.balance);
       }).catchError((_) {});
     }
@@ -367,90 +400,11 @@ class _WalletChipState extends State<_WalletChip> {
   @override
   Widget build(BuildContext context) {
     return TextButton.icon(
-      onPressed: () => context.go('/dashboard/wallet'),
+      onPressed: () => openDashboardRoute(context, '/dashboard/wallet'),
       icon: const Icon(Icons.account_balance_wallet_outlined, size: 18),
       label: Text(_balance == null ? 'کیف پول' : toman(_balance!)),
     );
   }
-}
-
-class _BottomNav extends StatelessWidget {
-  const _BottomNav({required this.location});
-
-  final String location;
-
-  @override
-  Widget build(BuildContext context) {
-    final features = context.watch<SessionController>().workspace?.features;
-    final items = mobileNav.where((item) => features?.enabled(item.feature) ?? true).toList();
-    const fallback = [
-      NavItem(path: '/dashboard/billing', label: 'اشتراک', icon: Icons.credit_card_outlined),
-      NavItem(path: '/dashboard/settings', label: 'تنظیمات', icon: Icons.settings_outlined),
-    ];
-    for (final item in fallback) {
-      if (items.length >= 2) break;
-      if (items.every((existing) => existing.path != item.path)) items.add(item);
-    }
-    if (items.length < 2) return const SizedBox.shrink();
-    var index = 0;
-    for (var i = 0; i < items.length; i++) {
-      if (_active(location, items[i])) index = i;
-    }
-    final dt = context.dt;
-    return Material(
-      color: dt.surface,
-      child: DecoratedBox(
-        decoration: BoxDecoration(border: Border(top: BorderSide(color: dt.border))),
-        child: SafeArea(
-          top: false,
-          child: SizedBox(
-            height: 64,
-            child: Row(
-              children: [
-                for (var i = 0; i < items.length; i++)
-                  Expanded(
-                    child: InkWell(
-                      onTap: () => context.go(items[i].path),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            index == i ? _filledIcon(items[i].icon) : items[i].icon,
-                            size: 24,
-                            color: index == i ? dt.primary : dt.textSubtle,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            items[i].label.split(' ').first,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: index == i ? dt.primary : dt.textMuted,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-IconData _filledIcon(IconData icon) {
-  return switch (icon) {
-    Icons.space_dashboard_outlined => Icons.space_dashboard,
-    Icons.people_outline => Icons.people,
-    Icons.receipt_long_outlined => Icons.receipt_long,
-    Icons.forum_outlined => Icons.forum,
-    Icons.credit_card_outlined => Icons.credit_card,
-    Icons.settings_outlined => Icons.settings,
-    _ => icon,
-  };
 }
 
 class _ShellBody extends StatelessWidget {
@@ -461,9 +415,12 @@ class _ShellBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final workspace = context.watch<SessionController>().workspace;
+    final workspace = context.watch<SessionBloc>().workspace;
     if (workspace == null) {
-      return const Center(child: Text('فضای کاری پیدا نشد. از تنظیمات یکی بسازید.'));
+      return const _CenteredNotice(
+        title: 'فضای کاری',
+        description: 'فضای کاری پیدا نشد. از تنظیمات یکی بسازید.',
+      );
     }
     if (workspace.needsSubscription && !subscriptionExempt(location)) {
       return const _NoSubscription();
@@ -488,16 +445,11 @@ class _NoSubscription extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final workspace = context.watch<SessionController>().workspace;
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        Text('برای استفاده از پنل، اشتراک «${workspace?.name ?? ''}» را فعال کنید.', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 8),
-        Text('بعد از پرداخت، ابزارهای پنل برای همین فضای کاری باز می‌شود.', style: TextStyle(color: context.dt.textMuted, height: 1.7)),
-        const SizedBox(height: 16),
-        FilledButton(onPressed: () => context.go('/dashboard/billing'), child: const Text('مشاهده اشتراک‌ها')),
-      ],
+    final workspace = context.watch<SessionBloc>().workspace;
+    return _CenteredNotice(
+      title: 'برای استفاده از پنل، اشتراک «${workspace?.name ?? ''}» را فعال کنید.',
+      description: 'بعد از پرداخت، ابزارهای پنل برای همین فضای کاری باز می‌شود.',
+      action: FilledButton(onPressed: () => openDashboardRoute(context, '/dashboard/billing'), child: const Text('مشاهده اشتراک‌ها')),
     );
   }
 }
@@ -507,14 +459,55 @@ class _FeatureDisabled extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(20),
+    return _CenteredNotice(
+      title: 'این بخش در طرح فعلی فعال نیست.',
+      description: 'با ارتقای اشتراک به این ابزار دسترسی پیدا می‌کنید.',
+      action: FilledButton(onPressed: () => openDashboardRoute(context, '/dashboard/billing'), child: const Text('ارتقای اشتراک')),
+    );
+  }
+}
+
+class _CenteredNotice extends StatelessWidget {
+  const _CenteredNotice({required this.title, required this.description, this.action});
+
+  final String title;
+  final String description;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    final dt = context.dt;
+    final showBack = GoRouter.of(context).canPop();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text('این بخش در طرح فعلی فعال نیست.', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 8),
-        Text('با ارتقای اشتراک به این ابزار دسترسی پیدا می‌کنید.', style: TextStyle(color: context.dt.textMuted)),
-        const SizedBox(height: 16),
-        FilledButton(onPressed: () => context.go('/dashboard/billing'), child: const Text('ارتقای اشتراک')),
+        if (showBack)
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: IconButton(
+              tooltip: 'بازگشت',
+              onPressed: () => context.pop(),
+              icon: const Icon(Icons.arrow_forward, textDirection: TextDirection.ltr),
+            ),
+          ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(title, textAlign: TextAlign.center, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: dt.text, height: 1.5)),
+                const SizedBox(height: 10),
+                Text(description, textAlign: TextAlign.center, style: TextStyle(color: dt.textMuted, height: 1.7)),
+                if (action != null) ...[
+                  const SizedBox(height: 20),
+                  action!,
+                ],
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -537,11 +530,11 @@ class _InstagramBannerState extends State<_InstagramBanner> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     final location = GoRouterState.of(context).uri.path;
     if (id == null || location.startsWith('/dashboard/settings') || id == _loadedFor) return;
     _loadedFor = id;
-    final api = context.read<DirectooApi>();
+    final api = context.read<InstagramRepository>();
     Future.wait([api.instagramAccounts(id), api.accessRequest(id).then<Object?>((value) => value)]).then((results) {
       if (!mounted) return;
       final accounts = results[0] as List<InstagramAccount>;
@@ -553,19 +546,16 @@ class _InstagramBannerState extends State<_InstagramBanner> {
   }
 
   Future<void> _connect() async {
-    final session = context.read<SessionController>();
+    final session = context.read<SessionBloc>();
     final id = session.workspaceId;
     if (id == null) return;
     if (_request?.status != 'approved') {
-      await session.prefs.setBool('instagram_pending', true);
-      session.instagramReviewing = _request?.reviewing ?? false;
-      session.gate = AuthGate.instagram;
-      session.publish();
+      await session.openInstagramSetup(reviewing: _request?.reviewing ?? false);
       return;
     }
     setState(() => _connecting = true);
     try {
-      final url = await context.read<DirectooApi>().startInstagramOAuth(id);
+      final url = await context.read<InstagramRepository>().startInstagramOAuth(id);
       if (url.isNotEmpty) {
         await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
       }
@@ -579,7 +569,7 @@ class _InstagramBannerState extends State<_InstagramBanner> {
   @override
   Widget build(BuildContext context) {
     if (!_missing) return const SizedBox.shrink();
-    final canConnect = context.watch<SessionController>().permissions.canManageInstagram;
+    final canConnect = context.watch<SessionBloc>().permissions.canManageInstagram;
     final dt = context.dt;
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -628,7 +618,7 @@ class _TutorialBannerState extends State<_TutorialBanner> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_items != null) return;
-    context.read<DirectooApi>().tutorials().then((items) {
+    context.read<TutorialsRepository>().tutorials().then((items) {
       if (mounted) setState(() => _items = items);
     }).catchError((_) {
       if (mounted) setState(() => _items = const []);

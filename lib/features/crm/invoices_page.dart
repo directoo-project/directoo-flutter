@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/api_exception.dart';
 import '../../core/format.dart';
 import '../../core/labels.dart';
-import '../../data/directoo_api.dart';
-import '../../models/models.dart';
-import '../../state/session.dart';
+import '../../domain/repositories/customers_repository.dart';
+import '../../domain/repositories/invoices_repository.dart';
+import '../../domain/repositories/products_repository.dart';
+import '../../domain/entities/models.dart';
+import '../../presentation/session/session_bloc.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/ui.dart';
 
@@ -29,7 +31,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     if (id != null && id != _loadedFor) {
       _loadedFor = id;
       _load();
@@ -41,7 +43,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
     if (id == null) return;
     setState(() => _loading = true);
     try {
-      final api = context.read<DirectooApi>();
+      final api = context.read<InvoicesRepository>();
       final results = await Future.wait([
         api.invoices(id, status: _status),
         api.invoiceSummary(id),
@@ -61,7 +63,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final canEdit = context.watch<SessionController>().permissions.canEditInvoices;
+    final canEdit = context.watch<SessionBloc>().permissions.canEditInvoices;
     final summary = _summary;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -159,12 +161,13 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   }
 
   Future<void> _load() async {
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     if (id == null) return;
     try {
-      final api = context.read<DirectooApi>();
-      final customers = await api.customers(id);
-      final products = await api.products(id);
+      final customersRepo = context.read<CustomersRepository>();
+      final productsRepo = context.read<ProductsRepository>();
+      final customers = await customersRepo.customers(id);
+      final products = await productsRepo.products(id);
       if (!mounted) return;
       setState(() {
         _customers = customers;
@@ -183,7 +186,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   }
 
   Future<void> _save() async {
-    final id = context.read<SessionController>().workspaceId;
+    final id = context.read<SessionBloc>().workspaceId;
     if (id == null || _customerId == null) return;
     final qty = int.tryParse(_qty.text) ?? 0;
     if (qty < 1 || _description.text.trim().isEmpty && _productId == null) {
@@ -192,7 +195,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     }
     setState(() => _saving = true);
     try {
-      await context.read<DirectooApi>().saveInvoice(id, {
+      await context.read<InvoicesRepository>().saveInvoice(id, {
         'customer': _customerId,
         'items': [
           {
@@ -278,11 +281,11 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
   }
 
   Future<void> _load() async {
-    final workspaceId = context.read<SessionController>().workspaceId;
+    final workspaceId = context.read<SessionBloc>().workspaceId;
     if (workspaceId == null) return;
     setState(() => _loading = true);
     try {
-      final invoice = await context.read<DirectooApi>().invoice(workspaceId, widget.id);
+      final invoice = await context.read<InvoicesRepository>().invoice(workspaceId, widget.id);
       if (mounted) setState(() => _invoice = invoice);
     } catch (error) {
       if (mounted) setState(() => _error = errorText(error));
@@ -291,11 +294,11 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     }
   }
 
-  Future<void> _act(Future<SalesInvoice> Function(DirectooApi api, int workspaceId) action) async {
-    final workspaceId = context.read<SessionController>().workspaceId;
+  Future<void> _act(Future<SalesInvoice> Function(InvoicesRepository api, int workspaceId) action) async {
+    final workspaceId = context.read<SessionBloc>().workspaceId;
     if (workspaceId == null) return;
     try {
-      final invoice = await action(context.read<DirectooApi>(), workspaceId);
+      final invoice = await action(context.read<InvoicesRepository>(), workspaceId);
       if (mounted) setState(() => _invoice = invoice);
     } catch (error) {
       if (mounted) setState(() => _error = errorText(error));
@@ -304,10 +307,26 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const LoadingView();
-    if (_error != null && _invoice == null) return ErrorView(message: _error!, onRetry: _load);
+    if (_loading) {
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PageHeader(title: 'فاکتور', description: 'جزئیات فاکتور'),
+          Expanded(child: LoadingView()),
+        ],
+      );
+    }
+    if (_error != null && _invoice == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const PageHeader(title: 'فاکتور', description: 'جزئیات فاکتور'),
+          Expanded(child: ErrorView(message: _error!, onRetry: _load)),
+        ],
+      );
+    }
     final invoice = _invoice!;
-    final canEdit = context.watch<SessionController>().permissions.canEditInvoices;
+    final canEdit = context.watch<SessionBloc>().permissions.canEditInvoices;
     return ListView(
       children: [
         PageHeader(title: invoice.number.isEmpty ? 'فاکتور' : invoice.number, description: invoice.customerName),
