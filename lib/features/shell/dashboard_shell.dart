@@ -15,7 +15,13 @@ import '../../theme/app_theme.dart';
 import '../../widgets/brand.dart';
 
 class NavItem {
-  const NavItem({required this.path, required this.label, required this.icon, this.exact = false, this.feature});
+  const NavItem({
+    required this.path,
+    required this.label,
+    required this.icon,
+    this.exact = false,
+    this.feature,
+  });
 
   final String path;
   final String label;
@@ -33,35 +39,145 @@ class NavSection {
 }
 
 const navSections = [
-  NavSection(id: 'overview', items: [
-    NavItem(path: '/dashboard', label: 'داشبورد', icon: Icons.space_dashboard_outlined, exact: true),
-  ]),
-  NavSection(id: 'crm', label: 'مدیریت مشتریان', items: [
-    NavItem(path: '/dashboard/customers', label: 'مشتریان', icon: Icons.people_outline, feature: 'customers_enabled'),
-    NavItem(path: '/dashboard/invoices', label: 'فاکتورها', icon: Icons.receipt_long_outlined, feature: 'customers_enabled'),
-    NavItem(path: '/dashboard/tickets', label: 'تیکت‌ها', icon: Icons.confirmation_number_outlined, feature: 'tickets_enabled'),
-    NavItem(path: '/dashboard/products', label: 'محصولات', icon: Icons.inventory_2_outlined, feature: 'products_enabled'),
-    NavItem(path: '/dashboard/storefront', label: 'فروشگاه‌ساز', icon: Icons.storefront_outlined),
-  ]),
-  NavSection(id: 'tools', label: 'ابزارها', items: [
-    NavItem(path: '/dashboard/inbox', label: 'صندوق ورودی', icon: Icons.forum_outlined, feature: 'inbox_enabled'),
-    NavItem(path: '/dashboard/comments', label: 'صندوق کامنت', icon: Icons.chat_bubble_outline, feature: 'inbox_enabled'),
-    NavItem(path: '/dashboard/smart-answering', label: 'پاسخ هوشمند', icon: Icons.bolt_outlined, feature: 'smart_reply_enabled'),
-    NavItem(path: '/dashboard/automation', label: 'کامنت هوشمند', icon: Icons.mode_comment_outlined, feature: 'automation_enabled'),
-    NavItem(path: '/dashboard/vitrin', label: 'ویترین ساز', icon: Icons.view_carousel_outlined, feature: 'vitrin_enabled'),
-    NavItem(path: '/dashboard/follow-up', label: 'پشتیبان هوشمند', icon: Icons.schedule_outlined, feature: 'followup_enabled'),
-    NavItem(path: '/dashboard/ice-breakers', label: 'پیام خوش‌آمدگویی', icon: Icons.waving_hand_outlined, feature: 'icebreaker_enabled'),
-  ]),
-  NavSection(id: 'insights', label: 'گزارش', items: [
-    NavItem(path: '/dashboard/analytics', label: 'گزارش‌ها', icon: Icons.insights_outlined, feature: 'analytics_enabled'),
-  ]),
-  NavSection(id: 'workspace', label: 'فضا و حساب', items: [
-    NavItem(path: '/dashboard/knowledge', label: 'پایگاه دانش', icon: Icons.menu_book_outlined, feature: 'knowledge_enabled'),
-    NavItem(path: '/dashboard/team', label: 'تیم', icon: Icons.groups_outlined, feature: 'team_enabled'),
-    NavItem(path: '/dashboard/wallet', label: 'کیف پول', icon: Icons.account_balance_wallet_outlined),
-    NavItem(path: '/dashboard/billing', label: 'اشتراک', icon: Icons.credit_card_outlined),
-    NavItem(path: '/dashboard/settings', label: 'تنظیمات', icon: Icons.settings_outlined),
-  ]),
+  NavSection(
+    id: 'overview',
+    items: [
+      NavItem(
+        path: '/dashboard',
+        label: 'داشبورد',
+        icon: Icons.space_dashboard_outlined,
+        exact: true,
+      ),
+    ],
+  ),
+  NavSection(
+    id: 'crm',
+    label: 'مدیریت مشتریان',
+    items: [
+      NavItem(
+        path: '/dashboard/customers',
+        label: 'مشتریان',
+        icon: Icons.people_outline,
+        feature: 'customers_enabled',
+      ),
+      NavItem(
+        path: '/dashboard/invoices',
+        label: 'فاکتورها',
+        icon: Icons.receipt_long_outlined,
+        feature: 'customers_enabled',
+      ),
+      NavItem(
+        path: '/dashboard/tickets',
+        label: 'تیکت‌ها',
+        icon: Icons.support_agent_outlined,
+        feature: 'tickets_enabled',
+      ),
+      NavItem(
+        path: '/dashboard/products',
+        label: 'محصولات',
+        icon: Icons.inventory_2_outlined,
+        feature: 'products_enabled',
+      ),
+      NavItem(
+        path: '/dashboard/storefront',
+        label: 'فروشگاه‌ساز',
+        icon: Icons.storefront_outlined,
+      ),
+    ],
+  ),
+  NavSection(
+    id: 'tools',
+    label: 'ابزارها',
+    items: [
+      NavItem(
+        path: '/dashboard/inbox',
+        label: 'صندوق ورودی',
+        icon: Icons.forum_outlined,
+        feature: 'inbox_enabled',
+      ),
+      NavItem(
+        path: '/dashboard/comments',
+        label: 'صندوق کامنت',
+        icon: Icons.chat_bubble_outline,
+        feature: 'inbox_enabled',
+      ),
+      NavItem(
+        path: '/dashboard/smart-answering',
+        label: 'پاسخ هوشمند',
+        icon: Icons.bolt_outlined,
+        feature: 'smart_reply_enabled',
+      ),
+      NavItem(
+        path: '/dashboard/automation',
+        label: 'کامنت هوشمند',
+        icon: Icons.mode_comment_outlined,
+        feature: 'automation_enabled',
+      ),
+      NavItem(
+        path: '/dashboard/vitrin',
+        label: 'ویترین ساز',
+        icon: Icons.view_carousel_outlined,
+        feature: 'vitrin_enabled',
+      ),
+      NavItem(
+        path: '/dashboard/follow-up',
+        label: 'پشتیبان هوشمند',
+        icon: Icons.schedule_outlined,
+        feature: 'followup_enabled',
+      ),
+      NavItem(
+        path: '/dashboard/ice-breakers',
+        label: 'پیام خوش‌آمدگویی',
+        icon: Icons.waving_hand_outlined,
+        feature: 'icebreaker_enabled',
+      ),
+    ],
+  ),
+  NavSection(
+    id: 'insights',
+    label: 'گزارش',
+    items: [
+      NavItem(
+        path: '/dashboard/analytics',
+        label: 'گزارش‌ها',
+        icon: Icons.insights_outlined,
+        feature: 'analytics_enabled',
+      ),
+    ],
+  ),
+  NavSection(
+    id: 'workspace',
+    label: 'فضا و حساب',
+    items: [
+      NavItem(
+        path: '/dashboard/knowledge',
+        label: 'پایگاه دانش',
+        icon: Icons.menu_book_outlined,
+        feature: 'knowledge_enabled',
+      ),
+      NavItem(
+        path: '/dashboard/team',
+        label: 'تیم',
+        icon: Icons.groups_outlined,
+        feature: 'team_enabled',
+      ),
+      NavItem(
+        path: '/dashboard/wallet',
+        label: 'کیف پول',
+        icon: Icons.account_balance_wallet_outlined,
+      ),
+      NavItem(
+        path: '/dashboard/billing',
+        label: 'اشتراک',
+        icon: Icons.credit_card_outlined,
+      ),
+      NavItem(
+        path: '/dashboard/settings',
+        label: 'تنظیمات',
+        icon: Icons.settings_outlined,
+      ),
+    ],
+  ),
 ];
 
 const _featurePaths = {
@@ -81,7 +197,11 @@ const _featurePaths = {
   '/dashboard/team': 'team_enabled',
 };
 
-const _subscriptionExempt = ['/dashboard/billing', '/dashboard/wallet', '/dashboard/settings'];
+const _subscriptionExempt = [
+  '/dashboard/billing',
+  '/dashboard/wallet',
+  '/dashboard/settings',
+];
 
 bool _active(String location, NavItem item) {
   if (item.exact) return location == item.path;
@@ -90,13 +210,16 @@ bool _active(String location, NavItem item) {
 
 String? featureForPath(String location) {
   for (final entry in _featurePaths.entries) {
-    if (location == entry.key || location.startsWith('${entry.key}/')) return entry.value;
+    if (location == entry.key || location.startsWith('${entry.key}/'))
+      return entry.value;
   }
   return null;
 }
 
 bool subscriptionExempt(String location) {
-  return _subscriptionExempt.any((prefix) => location == prefix || location.startsWith('$prefix/'));
+  return _subscriptionExempt.any(
+    (prefix) => location == prefix || location.startsWith('$prefix/'),
+  );
 }
 
 String menuKey(String location) {
@@ -116,7 +239,11 @@ void openDashboardRoute(BuildContext context, String path) {
 }
 
 class DashboardPageFrame extends StatelessWidget {
-  const DashboardPageFrame({super.key, required this.location, required this.child});
+  const DashboardPageFrame({
+    super.key,
+    required this.location,
+    required this.child,
+  });
 
   final String location;
   final Widget child;
@@ -125,13 +252,20 @@ class DashboardPageFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.dt.bgSubtle,
-      body: SafeArea(bottom: false, child: _ShellBody(location: location, child: child)),
+      body: SafeArea(
+        bottom: false,
+        child: _ShellBody(location: location, child: child),
+      ),
     );
   }
 }
 
 class DashboardShell extends StatelessWidget {
-  const DashboardShell({super.key, required this.location, required this.child});
+  const DashboardShell({
+    super.key,
+    required this.location,
+    required this.child,
+  });
 
   final String location;
   final Widget child;
@@ -140,7 +274,16 @@ class DashboardShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 1080;
     return Scaffold(
-      drawer: wide ? null : Drawer(child: SafeArea(child: _Sidebar(location: location, onNavigate: () => Navigator.pop(context)))),
+      drawer: wide
+          ? null
+          : Drawer(
+              child: SafeArea(
+                child: _Sidebar(
+                  location: location,
+                  onNavigate: () => Navigator.pop(context),
+                ),
+              ),
+            ),
       body: Row(
         children: [
           if (wide) SizedBox(width: 280, child: _Sidebar(location: location)),
@@ -195,42 +338,84 @@ class _Sidebar extends StatelessWidget {
                           context: context,
                           useRootNavigator: true,
                           backgroundColor: dt.surface,
-                          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.vertical(
+                              top: Radius.circular(24),
+                            ),
+                          ),
                           builder: (context) => SafeArea(
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 const SizedBox(height: 10),
-                                Container(width: 40, height: 4, decoration: BoxDecoration(color: dt.border, borderRadius: BorderRadius.circular(99))),
+                                Container(
+                                  width: 40,
+                                  height: 4,
+                                  decoration: BoxDecoration(
+                                    color: dt.border,
+                                    borderRadius: BorderRadius.circular(99),
+                                  ),
+                                ),
                                 const SizedBox(height: 8),
                                 for (final workspace in session.workspaces)
                                   ListTile(
                                     leading: Icon(
                                       Icons.check,
-                                      color: workspace.id == session.workspaceId ? dt.primary : Colors.transparent,
+                                      color: workspace.id == session.workspaceId
+                                          ? dt.primary
+                                          : Colors.transparent,
                                     ),
-                                    title: Text(workspace.name, style: const TextStyle(fontWeight: FontWeight.w700)),
-                                    onTap: () => Navigator.pop(context, workspace.id),
+                                    title: Text(
+                                      workspace.name,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    onTap: () =>
+                                        Navigator.pop(context, workspace.id),
                                   ),
                               ],
                             ),
                           ),
                         );
-                        if (picked != null) await session.selectWorkspace(picked);
+                        if (picked != null)
+                          await session.selectWorkspace(picked);
                       },
                 child: Container(
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: dt.primary, borderRadius: BorderRadius.circular(12)),
+                  decoration: BoxDecoration(
+                    color: dt.primary,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: Row(
                     children: [
-                      const Icon(Icons.apartment, color: Colors.white, size: 20),
+                      const Icon(
+                        Icons.apartment,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('فضای کاری', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w700)),
-                            Text(session.workspace!.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+                            const Text(
+                              'فضای کاری',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            Text(
+                              session.workspace!.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -247,20 +432,32 @@ class _Sidebar extends StatelessWidget {
                   if (section.label != null)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(12, 14, 12, 8),
-                      child: Text(section.label!, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: dt.textMuted)),
+                      child: Text(
+                        section.label!,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: dt.textMuted,
+                        ),
+                      ),
                     ),
                   for (final item in section.items)
                     if (features?.enabled(item.feature) ?? true)
-                      _NavTile(item: item, active: _active(location, item), onTap: () {
-                        final router = GoRouter.of(context);
-                        onNavigate?.call();
-                        if (item.path == '/dashboard') {
-                          if (location != '/dashboard') router.go('/dashboard');
-                          return;
-                        }
-                        if (location == item.path) return;
-                        router.push(item.path);
-                      }),
+                      _NavTile(
+                        item: item,
+                        active: _active(location, item),
+                        onTap: () {
+                          final router = GoRouter.of(context);
+                          onNavigate?.call();
+                          if (item.path == '/dashboard') {
+                            if (location != '/dashboard')
+                              router.go('/dashboard');
+                            return;
+                          }
+                          if (location == item.path) return;
+                          router.push(item.path);
+                        },
+                      ),
                 ],
               ],
             ),
@@ -272,7 +469,11 @@ class _Sidebar extends StatelessWidget {
 }
 
 class _NavTile extends StatelessWidget {
-  const _NavTile({required this.item, required this.active, required this.onTap});
+  const _NavTile({
+    required this.item,
+    required this.active,
+    required this.onTap,
+  });
 
   final NavItem item;
   final bool active;
@@ -293,10 +494,30 @@ class _NavTile extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
             child: Row(
               children: [
-                Icon(item.icon, size: 20, color: active ? dt.primary : dt.textSubtle),
+                Icon(
+                  item.icon,
+                  size: 20,
+                  color: active ? dt.primary : dt.textSubtle,
+                ),
                 const SizedBox(width: 10),
-                Expanded(child: Text(item.label, style: TextStyle(fontWeight: FontWeight.w700, color: active ? dt.text : dt.textMuted))),
-                if (active) Container(width: 4, height: 22, decoration: BoxDecoration(color: dt.primary, borderRadius: BorderRadius.circular(99))),
+                Expanded(
+                  child: Text(
+                    item.label,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: active ? dt.text : dt.textMuted,
+                    ),
+                  ),
+                ),
+                if (active)
+                  Container(
+                    width: 4,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: dt.primary,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -323,26 +544,54 @@ class _TopBar extends StatelessWidget {
         child: Container(
           height: 64,
           padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: dt.border))),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: dt.border)),
+          ),
           child: Row(
             children: [
               if (!wide)
-                IconButton(onPressed: () => Scaffold.of(context).openDrawer(), icon: const Icon(Icons.menu)),
+                IconButton(
+                  onPressed: () => Scaffold.of(context).openDrawer(),
+                  icon: const Icon(Icons.menu),
+                ),
               if (wide)
                 Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('پنل مشتری', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: dt.textMuted)),
+                    Text(
+                      'پنل مشتری',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: dt.textMuted,
+                      ),
+                    ),
                     Row(
                       children: [
-                        Text(workspace?.name ?? 'Directoo', style: const TextStyle(fontWeight: FontWeight.w800)),
+                        Text(
+                          workspace?.name ?? 'Directoo',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
                         if (workspace?.role != null) ...[
                           const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(color: dt.primary50, borderRadius: BorderRadius.circular(99)),
-                            child: Text(faLabel(roleLabels, workspace?.role), style: TextStyle(color: dt.primary, fontSize: 11, fontWeight: FontWeight.w700)),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: dt.primary50,
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                            child: Text(
+                              faLabel(roleLabels, workspace?.role),
+                              style: TextStyle(
+                                color: dt.primary,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
                         ],
                       ],
@@ -352,20 +601,36 @@ class _TopBar extends StatelessWidget {
               else
                 const BrandLogo(height: 28),
               const Spacer(),
-              if (session.permissions.canReply || (workspace?.features.enabled('tickets_enabled') ?? true))
+              if (session.permissions.canReply ||
+                  (workspace?.features.enabled('tickets_enabled') ?? true))
                 IconButton(
                   tooltip: 'تیکت‌ها',
-                  onPressed: () => openDashboardRoute(context, '/dashboard/tickets'),
-                  icon: const Icon(Icons.confirmation_number_outlined),
+                  onPressed: () =>
+                      openDashboardRoute(context, '/dashboard/tickets'),
+                  icon: const Icon(Icons.support_agent_outlined),
                 ),
+              IconButton(
+                tooltip: 'تنظیمات',
+                onPressed: () =>
+                    openDashboardRoute(context, '/dashboard/settings'),
+                icon: const Icon(Icons.settings_outlined),
+              ),
               if (wide) const _WalletChip(),
               IconButton(
                 tooltip: 'حالت تاریک',
                 onPressed: session.toggleTheme,
-                icon: Icon(session.dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
+                icon: Icon(
+                  session.dark
+                      ? Icons.light_mode_outlined
+                      : Icons.dark_mode_outlined,
+                ),
               ),
               if (wide)
-                IconButton(tooltip: 'خروج', onPressed: session.logout, icon: const Icon(Icons.logout)),
+                IconButton(
+                  tooltip: 'خروج',
+                  onPressed: session.logout,
+                  icon: const Icon(Icons.logout),
+                ),
             ],
           ),
         ),
@@ -391,9 +656,13 @@ class _WalletChipState extends State<_WalletChip> {
     final id = context.read<SessionBloc>().workspaceId;
     if (id != null && id != _loadedFor) {
       _loadedFor = id;
-      context.read<BillingRepository>().wallet(id).then((wallet) {
-        if (mounted) setState(() => _balance = wallet.balance);
-      }).catchError((_) {});
+      context
+          .read<BillingRepository>()
+          .wallet(id)
+          .then((wallet) {
+            if (mounted) setState(() => _balance = wallet.balance);
+          })
+          .catchError((_) {});
     }
   }
 
@@ -429,12 +698,21 @@ class _ShellBody extends StatelessWidget {
     if (feature != null && !workspace.features.enabled(feature)) {
       return const _FeatureDisabled();
     }
+    final home = location == '/dashboard';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (location == '/dashboard') const Padding(padding: EdgeInsets.fromLTRB(16, 16, 16, 0), child: _InstagramBanner()),
-        const Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: _TutorialBanner()),
-        Expanded(child: Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), child: child)),
+        if (!home)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: _TutorialBanner(),
+          ),
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(16, home ? 4 : 0, 16, 16),
+            child: child,
+          ),
+        ),
       ],
     );
   }
@@ -447,9 +725,14 @@ class _NoSubscription extends StatelessWidget {
   Widget build(BuildContext context) {
     final workspace = context.watch<SessionBloc>().workspace;
     return _CenteredNotice(
-      title: 'برای استفاده از پنل، اشتراک «${workspace?.name ?? ''}» را فعال کنید.',
-      description: 'بعد از پرداخت، ابزارهای پنل برای همین فضای کاری باز می‌شود.',
-      action: FilledButton(onPressed: () => openDashboardRoute(context, '/dashboard/billing'), child: const Text('مشاهده اشتراک‌ها')),
+      title:
+          'برای استفاده از پنل، اشتراک «${workspace?.name ?? ''}» را فعال کنید.',
+      description:
+          'بعد از پرداخت، ابزارهای پنل برای همین فضای کاری باز می‌شود.',
+      action: FilledButton(
+        onPressed: () => openDashboardRoute(context, '/dashboard/billing'),
+        child: const Text('مشاهده اشتراک‌ها'),
+      ),
     );
   }
 }
@@ -462,13 +745,20 @@ class _FeatureDisabled extends StatelessWidget {
     return _CenteredNotice(
       title: 'این بخش در طرح فعلی فعال نیست.',
       description: 'با ارتقای اشتراک به این ابزار دسترسی پیدا می‌کنید.',
-      action: FilledButton(onPressed: () => openDashboardRoute(context, '/dashboard/billing'), child: const Text('ارتقای اشتراک')),
+      action: FilledButton(
+        onPressed: () => openDashboardRoute(context, '/dashboard/billing'),
+        child: const Text('ارتقای اشتراک'),
+      ),
     );
   }
 }
 
 class _CenteredNotice extends StatelessWidget {
-  const _CenteredNotice({required this.title, required this.description, this.action});
+  const _CenteredNotice({
+    required this.title,
+    required this.description,
+    this.action,
+  });
 
   final String title;
   final String description;
@@ -487,7 +777,10 @@ class _CenteredNotice extends StatelessWidget {
             child: IconButton(
               tooltip: 'بازگشت',
               onPressed: () => context.pop(),
-              icon: const Icon(Icons.arrow_forward, textDirection: TextDirection.ltr),
+              icon: const Icon(
+                Icons.arrow_forward,
+                textDirection: TextDirection.ltr,
+              ),
             ),
           ),
         Expanded(
@@ -497,18 +790,40 @@ class _CenteredNotice extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(title, textAlign: TextAlign.center, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: dt.text, height: 1.5)),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: dt.text,
+                    height: 1.5,
+                  ),
+                ),
                 const SizedBox(height: 10),
-                Text(description, textAlign: TextAlign.center, style: TextStyle(color: dt.textMuted, height: 1.7)),
-                if (action != null) ...[
-                  const SizedBox(height: 20),
-                  action!,
-                ],
+                Text(
+                  description,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: dt.textMuted, height: 1.7),
+                ),
+                if (action != null) ...[const SizedBox(height: 20), action!],
               ],
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+class DashboardHomeBanners extends StatelessWidget {
+  const DashboardHomeBanners({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [_InstagramBanner(), _TutorialBanner()],
     );
   }
 }
@@ -532,17 +847,27 @@ class _InstagramBannerState extends State<_InstagramBanner> {
     super.didChangeDependencies();
     final id = context.read<SessionBloc>().workspaceId;
     final location = GoRouterState.of(context).uri.path;
-    if (id == null || location.startsWith('/dashboard/settings') || id == _loadedFor) return;
+    if (id == null ||
+        location.startsWith('/dashboard/settings') ||
+        id == _loadedFor)
+      return;
     _loadedFor = id;
     final api = context.read<InstagramRepository>();
-    Future.wait([api.instagramAccounts(id), api.accessRequest(id).then<Object?>((value) => value)]).then((results) {
-      if (!mounted) return;
-      final accounts = results[0] as List<InstagramAccount>;
-      setState(() {
-        _request = results[1] as InstagramAccessRequest?;
-        _missing = !accounts.any((account) => account.status == 'connected');
-      });
-    }).catchError((_) {});
+    Future.wait([
+          api.instagramAccounts(id),
+          api.accessRequest(id).then<Object?>((value) => value),
+        ])
+        .then((results) {
+          if (!mounted) return;
+          final accounts = results[0] as List<InstagramAccount>;
+          setState(() {
+            _request = results[1] as InstagramAccessRequest?;
+            _missing = !accounts.any(
+              (account) => account.status == 'connected',
+            );
+          });
+        })
+        .catchError((_) {});
   }
 
   Future<void> _connect() async {
@@ -555,7 +880,9 @@ class _InstagramBannerState extends State<_InstagramBanner> {
     }
     setState(() => _connecting = true);
     try {
-      final url = await context.read<InstagramRepository>().startInstagramOAuth(id);
+      final url = await context.read<InstagramRepository>().startInstagramOAuth(
+        id,
+      );
       if (url.isNotEmpty) {
         await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
       }
@@ -569,12 +896,20 @@ class _InstagramBannerState extends State<_InstagramBanner> {
   @override
   Widget build(BuildContext context) {
     if (!_missing) return const SizedBox.shrink();
-    final canConnect = context.watch<SessionBloc>().permissions.canManageInstagram;
+    final canConnect = context
+        .watch<SessionBloc>()
+        .permissions
+        .canManageInstagram;
     final dt = context.dt;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: dt.surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: dt.border)),
+      decoration: BoxDecoration(
+        color: dt.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: dt.border),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -583,20 +918,43 @@ class _InstagramBannerState extends State<_InstagramBanner> {
               Container(
                 width: 40,
                 height: 40,
-                decoration: BoxDecoration(color: dt.primary50, borderRadius: BorderRadius.circular(12)),
-                child: Icon(Icons.camera_alt_outlined, color: dt.coral, size: 20),
+                decoration: BoxDecoration(
+                  color: dt.primary50,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.camera_alt_outlined,
+                  color: dt.coral,
+                  size: 20,
+                ),
               ),
               const SizedBox(width: 12),
-              const Expanded(child: Text('اینستاگرام متصل نیست', style: TextStyle(fontWeight: FontWeight.w800))),
+              const Expanded(
+                child: Text(
+                  'اینستاگرام متصل نیست',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 8),
-          Text('برای دریافت دایرکت و پاسخ هوشمند، حساب را وصل کنید.', style: TextStyle(color: dt.textMuted, height: 1.6)),
+          Text(
+            'برای دریافت دایرکت و پاسخ هوشمند، حساب را وصل کنید.',
+            style: TextStyle(color: dt.textMuted, height: 1.6),
+          ),
           const SizedBox(height: 12),
           if (canConnect)
-            FilledButton(onPressed: _connecting ? null : _connect, child: Text(_connecting ? 'در حال اتصال...' : 'اتصال به اینستاگرام'))
+            FilledButton(
+              onPressed: _connecting ? null : _connect,
+              child: Text(
+                _connecting ? 'در حال اتصال...' : 'اتصال به اینستاگرام',
+              ),
+            )
           else
-            Text('برای اتصال، از مدیر فضا بخواهید اینستاگرام را وصل کند.', style: TextStyle(color: dt.textMuted)),
+            Text(
+              'برای اتصال، از مدیر فضا بخواهید اینستاگرام را وصل کند.',
+              style: TextStyle(color: dt.textMuted),
+            ),
           if (_error != null) Text(_error!, style: TextStyle(color: dt.error)),
         ],
       ),
@@ -618,11 +976,15 @@ class _TutorialBannerState extends State<_TutorialBanner> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_items != null) return;
-    context.read<TutorialsRepository>().tutorials().then((items) {
-      if (mounted) setState(() => _items = items);
-    }).catchError((_) {
-      if (mounted) setState(() => _items = const []);
-    });
+    context
+        .read<TutorialsRepository>()
+        .tutorials()
+        .then((items) {
+          if (mounted) setState(() => _items = items);
+        })
+        .catchError((_) {
+          if (mounted) setState(() => _items = const []);
+        });
   }
 
   @override
@@ -631,7 +993,8 @@ class _TutorialBannerState extends State<_TutorialBanner> {
     final key = menuKey(location);
     MenuTutorial? tutorial;
     for (final item in _items ?? const <MenuTutorial>[]) {
-      if (item.key == key && item.isActive && item.linkUrl.isNotEmpty) tutorial = item;
+      if (item.key == key && item.isActive && item.linkUrl.isNotEmpty)
+        tutorial = item;
     }
     if (tutorial == null) return const SizedBox.shrink();
     final link = tutorial.linkUrl;
@@ -639,19 +1002,37 @@ class _TutorialBannerState extends State<_TutorialBanner> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: dt.primary50, borderRadius: BorderRadius.circular(14)),
+      decoration: BoxDecoration(
+        color: dt.primary50,
+        borderRadius: BorderRadius.circular(14),
+      ),
       child: Row(
         children: [
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(tutorial.title, style: const TextStyle(fontWeight: FontWeight.w800)),
-                if (tutorial.description.isNotEmpty) Text(tutorial.description, style: TextStyle(color: dt.textMuted)),
+                Text(
+                  tutorial.title,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                if (tutorial.description.isNotEmpty)
+                  Text(
+                    tutorial.description,
+                    style: TextStyle(color: dt.textMuted),
+                  ),
               ],
             ),
           ),
-          TextButton(onPressed: () => launchUrl(Uri.parse(link), mode: LaunchMode.externalApplication), child: Text(tutorial.linkLabel.isEmpty ? 'آموزش' : tutorial.linkLabel)),
+          TextButton(
+            onPressed: () => launchUrl(
+              Uri.parse(link),
+              mode: LaunchMode.externalApplication,
+            ),
+            child: Text(
+              tutorial.linkLabel.isEmpty ? 'آموزش' : tutorial.linkLabel,
+            ),
+          ),
         ],
       ),
     );

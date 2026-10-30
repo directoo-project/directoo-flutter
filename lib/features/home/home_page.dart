@@ -74,35 +74,60 @@ class _HomePageState extends State<HomePage> {
     final workspace = context.watch<SessionBloc>().workspace;
     if (_loading) {
       if (analytics) {
-        return const Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            PageHeader(title: 'گزارش‌ها', description: 'آمار ۱۴ روز گذشته فضای کاری'),
-            Expanded(child: _OverviewSkeleton()),
+        return ListView(
+          children: const [
+            PageHeader(
+              title: 'گزارش‌ها',
+              description: 'آمار ۱۴ روز گذشته فضای کاری',
+            ),
+            _OverviewSkeleton(),
           ],
         );
       }
-      return const _OverviewSkeleton();
+      return ListView(
+        padding: EdgeInsets.zero,
+        children: const [DashboardHomeBanners(), _OverviewSkeleton()],
+      );
     }
     final data = _data;
     final empty = _error == null && (data == null || _isEmpty(data));
     final header = analytics
-        ? const PageHeader(title: 'گزارش‌ها', description: 'آمار ۱۴ روز گذشته فضای کاری')
+        ? const PageHeader(
+            title: 'گزارش‌ها',
+            description: 'آمار ۱۴ روز گذشته فضای کاری',
+          )
         : _Greeting(name: workspace?.name ?? '');
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        header,
-        Expanded(
-          child: empty || _error != null
-              ? (_error != null
-                  ? ErrorView(message: _error!, onRetry: () {
+    if (empty || _error != null) {
+      return CustomScrollView(
+        primary: false,
+        slivers: [
+          SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [if (!analytics) const DashboardHomeBanners(), header],
+            ),
+          ),
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: _error != null
+                ? ErrorView(
+                    message: _error!,
+                    onRetry: () {
                       final id = _loadedFor;
                       if (id != null) _load(id);
-                    })
-                  : const EmptyView(title: 'آماری برای نمایش نیست'))
-              : _OverviewBody(data: data!),
-        ),
+                    },
+                  )
+                : const EmptyView(title: 'آماری برای نمایش نیست'),
+          ),
+        ],
+      );
+    }
+    return ListView(
+      padding: analytics ? null : EdgeInsets.zero,
+      children: [
+        if (!analytics) const DashboardHomeBanners(),
+        header,
+        _OverviewBody(data: data!),
       ],
     );
   }
@@ -121,39 +146,32 @@ class _Greeting extends StatelessWidget {
       children: [
         Row(
           children: [
-            Container(width: 10, height: 10, decoration: BoxDecoration(color: dt.coral, shape: BoxShape.circle)),
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: dt.coral,
+                shape: BoxShape.circle,
+              ),
+            ),
             const SizedBox(width: 8),
-            Expanded(child: Text('سلام، $name', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800))),
+            Expanded(
+              child: Text(
+                'سلام، $name',
+                style: const TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
           ],
         ),
-        const SizedBox(height: 6),
-        Text('نمای کلی عملکرد دایرکت شما — ۱۴ روز گذشته', style: TextStyle(color: dt.textMuted, height: 1.6)),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            FilledButton.icon(
-              onPressed: () => openDashboardRoute(context, '/dashboard/inbox'),
-              icon: const Icon(Icons.forum_outlined, size: 18),
-              label: const Text('صندوق ورودی'),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(0, 44),
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                shape: const StadiumBorder(),
-              ),
-            ),
-            OutlinedButton.icon(
-              onPressed: () => openDashboardRoute(context, '/dashboard/analytics'),
-              icon: const Icon(Icons.insights_outlined, size: 18),
-              label: const Text('گزارش کامل'),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(0, 44),
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                shape: const StadiumBorder(),
-              ),
-            ),
-          ],
+        const SizedBox(height: 14),
+        const _Shortcuts(),
+        const SizedBox(height: 14),
+        Text(
+          'نمای کلی عملکرد دایرکت شما — ۱۴ روز گذشته',
+          style: TextStyle(color: dt.textMuted, height: 1.6),
         ),
         const SizedBox(height: 16),
       ],
@@ -168,36 +186,66 @@ class _OverviewBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxStatus = data.customerByStatus.fold<int>(0, (max, point) => point.value > max ? point.value : max);
-    return ListView(
+    final maxStatus = data.customerByStatus.fold<int>(
+      0,
+      (max, point) => point.value > max ? point.value : max,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _StatGrid(children: [
-          _Stat(
-            icon: Icons.chat_bubble_outline,
-            label: 'مکالمات',
-            value: faGrouped(data.conversations),
-            hint: _weekHint(data.conversationsWeekChange),
-            positive: (data.conversationsWeekChange ?? 0) >= 0,
-          ),
-          _Stat(
-            icon: Icons.person_outline,
-            label: 'لیدها',
-            value: faGrouped(data.leads),
-            hint: _weekHint(data.leadsWeekChange),
-            positive: (data.leadsWeekChange ?? 0) >= 0,
-          ),
-          _Stat(icon: Icons.trending_up, label: 'نرخ تبدیل', value: '${faDigits(data.conversionRate.toStringAsFixed(0))}٪'),
-          _Stat(icon: Icons.receipt_long_outlined, label: 'فروش', value: faGrouped(data.sales)),
-        ]),
+        _StatGrid(
+          children: [
+            _Stat(
+              icon: Icons.chat_bubble_outline,
+              label: 'مکالمات',
+              value: faGrouped(data.conversations),
+              hint: _weekHint(data.conversationsWeekChange),
+              positive: (data.conversationsWeekChange ?? 0) >= 0,
+            ),
+            _Stat(
+              icon: Icons.person_outline,
+              label: 'لیدها',
+              value: faGrouped(data.leads),
+              hint: _weekHint(data.leadsWeekChange),
+              positive: (data.leadsWeekChange ?? 0) >= 0,
+            ),
+            _Stat(
+              icon: Icons.trending_up,
+              label: 'نرخ تبدیل',
+              value: '${faDigits(data.conversionRate.toStringAsFixed(0))}٪',
+            ),
+            _Stat(
+              icon: Icons.receipt_long_outlined,
+              label: 'فروش',
+              value: faGrouped(data.sales),
+            ),
+          ],
+        ),
         const SizedBox(height: 10),
-        _Stat(icon: Icons.description_outlined, label: 'درآمد', value: toman(data.revenue), wide: true),
+        _Stat(
+          icon: Icons.description_outlined,
+          label: 'درآمد',
+          value: toman(data.revenue),
+          wide: true,
+        ),
         const SizedBox(height: 10),
-        _StatGrid(children: [
-          _Stat(icon: Icons.auto_awesome_outlined, label: 'حل توسط هوش مصنوعی', value: '${faDigits(data.aiResolutionRate.toStringAsFixed(0))}٪'),
-          _Stat(icon: Icons.inventory_2_outlined, label: 'محصول فعال', value: faGrouped(data.activeProducts)),
-        ]),
+        _StatGrid(
+          children: [
+            _Stat(
+              icon: Icons.auto_awesome_outlined,
+              label: 'حل توسط هوش مصنوعی',
+              value: '${faDigits(data.aiResolutionRate.toStringAsFixed(0))}٪',
+            ),
+            _Stat(
+              icon: Icons.inventory_2_outlined,
+              label: 'محصول فعال',
+              value: faGrouped(data.activeProducts),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
-        if (data.conversationGrowth.isNotEmpty) _GrowthChart(points: data.conversationGrowth),
+        if (data.conversationGrowth.isNotEmpty)
+          _GrowthChart(points: data.conversationGrowth),
         if (data.customerByStatus.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
@@ -205,19 +253,32 @@ class _OverviewBody extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text('مشتریان بر اساس وضعیت', style: TextStyle(fontWeight: FontWeight.w800)),
+                  const Text(
+                    'مشتریان بر اساس وضعیت',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
                   const SizedBox(height: 14),
                   for (final point in data.customerByStatus)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: Row(
                         children: [
-                          SizedBox(width: 52, child: Text(faLabel(customerStatusLabels, point.label), style: const TextStyle(fontWeight: FontWeight.w700))),
+                          SizedBox(
+                            width: 52,
+                            child: Text(
+                              faLabel(customerStatusLabels, point.label),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
                           Expanded(
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(99),
                               child: LinearProgressIndicator(
-                                value: maxStatus == 0 ? 0 : point.value / maxStatus,
+                                value: maxStatus == 0
+                                    ? 0
+                                    : point.value / maxStatus,
                                 minHeight: 8,
                                 backgroundColor: context.dt.surfaceMuted,
                                 color: context.dt.primary,
@@ -225,7 +286,16 @@ class _OverviewBody extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 10),
-                          SizedBox(width: 28, child: Text(faInt(point.value), textAlign: TextAlign.end, style: const TextStyle(fontWeight: FontWeight.w800))),
+                          SizedBox(
+                            width: 28,
+                            child: Text(
+                              faInt(point.value),
+                              textAlign: TextAlign.end,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -233,13 +303,6 @@ class _OverviewBody extends StatelessWidget {
               ),
             ),
           ),
-        const SectionTitle(title: 'دسترسی سریع'),
-        _StatGrid(children: [
-          _Quick(icon: Icons.forum_outlined, title: 'صندوق ورودی', caption: 'پاسخ‌های آماده و گفتگو', onTap: () => openDashboardRoute(context, '/dashboard/inbox')),
-          _Quick(icon: Icons.view_carousel_outlined, title: 'ویترین ساز', caption: 'کارت محصول در دایرکت', onTap: () => openDashboardRoute(context, '/dashboard/vitrin')),
-          _Quick(icon: Icons.people_outline, title: 'مشتریان', caption: 'مدیریت مشتریان و لیدها', onTap: () => openDashboardRoute(context, '/dashboard/customers')),
-          _Quick(icon: Icons.mode_comment_outlined, title: 'کامنت هوشمند', caption: 'پاسخ خودکار به کامنت', onTap: () => openDashboardRoute(context, '/dashboard/automation')),
-        ]),
       ],
     );
   }
@@ -265,7 +328,9 @@ class _StatGrid extends StatelessWidget {
         return Wrap(
           spacing: gap,
           runSpacing: gap,
-          children: [for (final child in children) SizedBox(width: width, child: child)],
+          children: [
+            for (final child in children) SizedBox(width: width, child: child),
+          ],
         );
       },
     );
@@ -273,7 +338,14 @@ class _StatGrid extends StatelessWidget {
 }
 
 class _Stat extends StatelessWidget {
-  const _Stat({required this.icon, required this.label, required this.value, this.hint, this.positive = true, this.wide = false});
+  const _Stat({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.hint,
+    this.positive = true,
+    this.wide = false,
+  });
 
   final IconData icon;
   final String label;
@@ -291,20 +363,48 @@ class _Stat extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: Text(label, style: TextStyle(color: dt.textMuted, fontSize: 13, fontWeight: FontWeight.w600))),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: dt.textMuted,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
               Container(
                 width: 32,
                 height: 32,
-                decoration: BoxDecoration(color: dt.primary50, borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(
+                  color: dt.primary50,
+                  borderRadius: BorderRadius.circular(10),
+                ),
                 child: Icon(icon, size: 16, color: dt.primary),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          Text(value, style: TextStyle(fontWeight: FontWeight.w800, fontSize: wide ? 22 : 26, color: dt.text, height: 1.2)),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: wide ? 22 : 26,
+              color: dt.text,
+              height: 1.2,
+            ),
+          ),
           if (hint != null) ...[
             const SizedBox(height: 6),
-            Text(hint!, style: TextStyle(color: positive ? dt.success : dt.error, fontSize: 12, fontWeight: FontWeight.w600, height: 1.4)),
+            Text(
+              hint!,
+              style: TextStyle(
+                color: positive ? dt.success : dt.error,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                height: 1.4,
+              ),
+            ),
           ],
         ],
       ),
@@ -312,39 +412,74 @@ class _Stat extends StatelessWidget {
   }
 }
 
-class _Quick extends StatelessWidget {
-  const _Quick({required this.icon, required this.title, required this.caption, required this.onTap});
+class _Shortcuts extends StatelessWidget {
+  const _Shortcuts();
 
-  final IconData icon;
-  final String title;
-  final String caption;
-  final VoidCallback onTap;
+  static const _paths = [
+    '/dashboard/smart-answering',
+    '/dashboard/automation',
+    '/dashboard/vitrin',
+    '/dashboard/follow-up',
+    '/dashboard/ice-breakers',
+  ];
+
+  static const _hues = <Color>[
+    Color(0xFF2D4BFF),
+    Color(0xFF16A34A),
+    Color(0xFFFF5C39),
+    Color(0xFF7C3AED),
+    Color(0xFFD97706),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    final dt = context.dt;
-    return SurfaceCard(
-      padding: EdgeInsets.zero,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(color: dt.primary50, borderRadius: BorderRadius.circular(12)),
-                child: Icon(icon, color: dt.primary, size: 20),
+    final byPath = {for (final section in navSections) for (final item in section.items) item.path: item};
+    final items = [for (final path in _paths) byPath[path]].whereType<NavItem>().toList();
+    if (items.isEmpty) return const SizedBox.shrink();
+    return SizedBox(
+      height: 108,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        primary: false,
+        itemCount: items.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final item = items[index];
+          final hue = _hues[index % _hues.length];
+          return Material(
+            color: hue.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(18),
+            child: InkWell(
+              onTap: () => openDashboardRoute(context, item.path),
+              borderRadius: BorderRadius.circular(18),
+              child: SizedBox(
+                width: 92,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(item.icon, color: hue, size: 22),
+                      const SizedBox(height: 8),
+                      Text(
+                        item.label,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          height: 1.3,
+                          color: context.dt.text,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              const SizedBox(height: 12),
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-              const SizedBox(height: 4),
-              Text(caption, style: TextStyle(color: dt.textMuted, fontSize: 12, height: 1.5)),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -363,8 +498,9 @@ class _OverviewSkeleton extends StatelessWidget {
         Expanded(child: SkeletonBox(height: 108, radius: 16)),
       ],
     );
-    return ListView(
-      children: const [
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
         SkeletonBox(width: 180, height: 22, radius: 8),
         gap,
         SkeletonBox(width: 220, height: 12, radius: 8),
@@ -399,11 +535,29 @@ class _GrowthChart extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Expanded(child: Text('رشد مکالمات', style: TextStyle(fontWeight: FontWeight.w800))),
+                const Expanded(
+                  child: Text(
+                    'رشد مکالمات',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: context.dt.surfaceMuted, borderRadius: BorderRadius.circular(999)),
-                  child: Text('۱۴ روز گذشته', style: TextStyle(color: context.dt.textMuted, fontSize: 12, fontWeight: FontWeight.w700)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: context.dt.surfaceMuted,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '۱۴ روز گذشته',
+                    style: TextStyle(
+                      color: context.dt.textMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -421,9 +575,13 @@ class _GrowthChart extends StatelessWidget {
                       color: color,
                       barWidth: 3,
                       dotData: const FlDotData(show: false),
-                      belowBarData: BarAreaData(show: true, color: color.withValues(alpha: 0.12)),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        color: color.withValues(alpha: 0.12),
+                      ),
                       spots: [
-                        for (var i = 0; i < points.length; i++) FlSpot(i.toDouble(), points[i].value.toDouble()),
+                        for (var i = 0; i < points.length; i++)
+                          FlSpot(i.toDouble(), points[i].value.toDouble()),
                       ],
                     ),
                   ],

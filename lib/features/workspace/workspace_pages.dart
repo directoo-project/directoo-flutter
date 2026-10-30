@@ -37,7 +37,7 @@ class KnowledgePage extends StatefulWidget {
   State<KnowledgePage> createState() => _KnowledgePageState();
 }
 
-class _KnowledgePageState extends State<KnowledgePage> {
+class _KnowledgePageState extends State<KnowledgePage> with SingleTickerProviderStateMixin {
   final _name = TextEditingController();
   final _about = TextEditingController();
   final _phone = TextEditingController();
@@ -45,6 +45,7 @@ class _KnowledgePageState extends State<KnowledgePage> {
   final _hours = TextEditingController();
   final _allowed = TextEditingController();
   final _forbidden = TextEditingController();
+  late final TabController _tabs;
   String _industry = '';
   List<Faq> _faqs = const [];
   var _loading = true;
@@ -54,11 +55,13 @@ class _KnowledgePageState extends State<KnowledgePage> {
   @override
   void initState() {
     super.initState();
+    _tabs = TabController(length: 3, vsync: this);
     _load();
   }
 
   @override
   void dispose() {
+    _tabs.dispose();
     for (final controller in [_name, _about, _phone, _address, _hours, _allowed, _forbidden]) {
       controller.dispose();
     }
@@ -155,51 +158,254 @@ class _KnowledgePageState extends State<KnowledgePage> {
         ],
       );
     }
-    return ListView(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const PageHeader(title: 'پایگاه دانش', description: 'اطلاعات کسب‌وکار، قوانین پاسخ و سؤالات متداول'),
         if (_message != null) NoticeBanner(message: _message!),
         if (_error != null) NoticeBanner(message: _error!, error: true),
-        const SectionTitle(title: 'کسب‌وکار'),
-        TextField(controller: _name, decoration: const InputDecoration(labelText: 'نام')),
+        _KnowledgeTabBar(controller: _tabs),
         const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
-          initialValue: _industry.isEmpty ? null : _industry,
-          decoration: const InputDecoration(labelText: 'حوزه'),
-          items: [for (final entry in industryLabels.entries) DropdownMenuItem(value: entry.key, child: Text(entry.value))],
-          onChanged: (value) => setState(() => _industry = value ?? ''),
+        Expanded(
+          child: TabBarView(
+            controller: _tabs,
+            children: [
+              _BusinessTab(
+                name: _name,
+                about: _about,
+                phone: _phone,
+                address: _address,
+                hours: _hours,
+                industry: _industry,
+                onIndustry: (value) => setState(() => _industry = value),
+                onSave: _saveBusiness,
+              ),
+              _RulesTab(allowed: _allowed, forbidden: _forbidden, onSave: _saveBusiness),
+              _FaqTab(faqs: _faqs, onAdd: _addFaq, onDelete: _deleteFaq),
+            ],
+          ),
         ),
+      ],
+    );
+  }
+}
+
+class _KnowledgeTabBar extends StatelessWidget {
+  const _KnowledgeTabBar({required this.controller});
+
+  final TabController controller;
+
+  static const _tabs = [
+    (icon: Icons.storefront_outlined, label: 'کسب‌وکار'),
+    (icon: Icons.rule_outlined, label: 'قوانین'),
+    (icon: Icons.quiz_outlined, label: 'سؤالات'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final dt = context.dt;
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        return Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(color: dt.surfaceMuted, borderRadius: BorderRadius.circular(16)),
+          child: Row(
+            children: [
+              for (var i = 0; i < _tabs.length; i++)
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => controller.animateTo(i),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: controller.index == i ? dt.surface : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: controller.index == i
+                            ? [BoxShadow(color: dt.text.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 2))]
+                            : null,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(_tabs[i].icon, size: 16, color: controller.index == i ? dt.primary : dt.textMuted),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              _tabs[i].label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: controller.index == i ? dt.primary : dt.textMuted,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _BusinessTab extends StatelessWidget {
+  const _BusinessTab({
+    required this.name,
+    required this.about,
+    required this.phone,
+    required this.address,
+    required this.hours,
+    required this.industry,
+    required this.onIndustry,
+    required this.onSave,
+  });
+
+  final TextEditingController name;
+  final TextEditingController about;
+  final TextEditingController phone;
+  final TextEditingController address;
+  final TextEditingController hours;
+  final String industry;
+  final ValueChanged<String> onIndustry;
+  final VoidCallback onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    final dt = context.dt;
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 24),
+      children: [
+        Text('این اطلاعات را دستیار هنگام پاسخ به مشتری استفاده می‌کند.', style: TextStyle(color: dt.textMuted, height: 1.6)),
         const SizedBox(height: 12),
-        TextField(controller: _about, minLines: 2, maxLines: 4, decoration: const InputDecoration(labelText: 'درباره')),
+        SurfaceCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(controller: name, decoration: const InputDecoration(labelText: 'نام کسب‌وکار')),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: industry.isEmpty ? null : industry,
+                decoration: const InputDecoration(labelText: 'حوزه فعالیت'),
+                items: [for (final entry in industryLabels.entries) DropdownMenuItem(value: entry.key, child: Text(entry.value))],
+                onChanged: (value) => onIndustry(value ?? ''),
+              ),
+              const SizedBox(height: 12),
+              TextField(controller: about, minLines: 3, maxLines: 5, decoration: const InputDecoration(labelText: 'درباره کسب‌وکار')),
+              const SizedBox(height: 12),
+              TextField(controller: phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'تلفن')),
+              const SizedBox(height: 12),
+              TextField(controller: address, decoration: const InputDecoration(labelText: 'آدرس')),
+              const SizedBox(height: 12),
+              TextField(controller: hours, decoration: const InputDecoration(labelText: 'ساعات کاری')),
+              const SizedBox(height: 16),
+              FilledButton(onPressed: onSave, child: const Text('ذخیره')),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RulesTab extends StatelessWidget {
+  const _RulesTab({required this.allowed, required this.forbidden, required this.onSave});
+
+  final TextEditingController allowed;
+  final TextEditingController forbidden;
+  final VoidCallback onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    final dt = context.dt;
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 24),
+      children: [
+        Text('دستیار فقط در محدوده این قوانین پاسخ می‌دهد.', style: TextStyle(color: dt.textMuted, height: 1.6)),
         const SizedBox(height: 12),
-        TextField(controller: _phone, decoration: const InputDecoration(labelText: 'تلفن')),
-        const SizedBox(height: 12),
-        TextField(controller: _address, decoration: const InputDecoration(labelText: 'آدرس')),
-        const SizedBox(height: 12),
-        TextField(controller: _hours, decoration: const InputDecoration(labelText: 'ساعات')),
-        const SizedBox(height: 16),
-        const SectionTitle(title: 'قوانین هوشمند'),
-        TextField(controller: _allowed, minLines: 2, maxLines: 4, decoration: const InputDecoration(labelText: 'موضوعات مجاز')),
-        const SizedBox(height: 12),
-        TextField(controller: _forbidden, minLines: 2, maxLines: 4, decoration: const InputDecoration(labelText: 'موضوعات ممنوع')),
-        const SizedBox(height: 16),
-        FilledButton(onPressed: _saveBusiness, child: const Text('ذخیره')),
-        const SizedBox(height: 20),
+        SurfaceCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(controller: allowed, minLines: 4, maxLines: 7, decoration: const InputDecoration(labelText: 'موضوعات مجاز', alignLabelWithHint: true)),
+              const SizedBox(height: 12),
+              TextField(controller: forbidden, minLines: 4, maxLines: 7, decoration: const InputDecoration(labelText: 'موضوعات ممنوع', alignLabelWithHint: true)),
+              const SizedBox(height: 16),
+              FilledButton(onPressed: onSave, child: const Text('ذخیره')),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FaqTab extends StatelessWidget {
+  const _FaqTab({required this.faqs, required this.onAdd, required this.onDelete});
+
+  final List<Faq> faqs;
+  final VoidCallback onAdd;
+  final ValueChanged<Faq> onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final dt = context.dt;
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 24),
+      children: [
         Row(
           children: [
-            const Expanded(child: SectionTitle(title: 'سؤالات متداول')),
-            IconButton(onPressed: _addFaq, icon: const Icon(Icons.add)),
+            Expanded(child: Text('پاسخ‌های آماده برای سؤال‌های تکراری', style: TextStyle(color: dt.textMuted, height: 1.5))),
+            const SizedBox(width: 8),
+            FilledButton.icon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('سؤال'),
+              style: FilledButton.styleFrom(minimumSize: const Size(0, 40), padding: const EdgeInsets.symmetric(horizontal: 14)),
+            ),
           ],
         ),
-        for (final faq in _faqs)
+        const SizedBox(height: 12),
+        if (faqs.isEmpty)
           SurfaceCard(
-            child: Row(
-              children: [
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(faq.question, style: const TextStyle(fontWeight: FontWeight.w800)), Text(faq.answer)])),
-                IconButton(onPressed: () => _deleteFaq(faq), icon: const Icon(Icons.delete_outline)),
-              ],
+            child: Text('هنوز سؤالی ثبت نشده.', textAlign: TextAlign.center, style: TextStyle(color: dt.textMuted, height: 1.6)),
+          )
+        else
+          for (final faq in faqs) ...[
+            SurfaceCard(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(color: dt.primary50, borderRadius: BorderRadius.circular(12)),
+                    child: Icon(Icons.help_outline, size: 18, color: dt.primary),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(faq.question, style: const TextStyle(fontWeight: FontWeight.w800, height: 1.5)),
+                        const SizedBox(height: 4),
+                        Text(faq.answer, style: TextStyle(color: dt.textMuted, height: 1.6)),
+                      ],
+                    ),
+                  ),
+                  IconButton(onPressed: () => onDelete(faq), icon: Icon(Icons.delete_outline, color: dt.error)),
+                ],
+              ),
             ),
-          ),
+            const SizedBox(height: 8),
+          ],
       ],
     );
   }
@@ -756,8 +962,6 @@ class _SettingsPageState extends State<SettingsPage> {
   final _first = TextEditingController();
   final _last = TextEditingController();
   final _email = TextEditingController();
-  final _workspaceName = TextEditingController();
-  final _timezone = TextEditingController();
   AuthUser? _user;
   List<InstagramAccount> _accounts = const [];
   var _loading = true;
@@ -772,7 +976,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   void dispose() {
-    for (final controller in [_first, _last, _email, _workspaceName, _timezone]) {
+    for (final controller in [_first, _last, _email]) {
       controller.dispose();
     }
     super.dispose();
@@ -787,8 +991,6 @@ class _SettingsPageState extends State<SettingsPage> {
       _first.text = _user?.firstName ?? '';
       _last.text = _user?.lastName ?? '';
       _email.text = _user?.email ?? '';
-      _workspaceName.text = session.workspace?.name ?? '';
-      _timezone.text = session.workspace?.timezone ?? '';
       final id = session.workspaceId;
       if (id != null) {
         try {
@@ -822,52 +1024,6 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  Future<void> _saveWorkspace() async {
-    final session = context.read<SessionBloc>();
-    final workspace = session.workspace;
-    if (workspace == null) return;
-    try {
-      await context.read<WorkspaceRepository>().updateWorkspace(workspace.id, {
-        'name': _workspaceName.text.trim(),
-        'timezone': _timezone.text.trim(),
-      });
-      await session.reloadWorkspaces();
-      if (mounted) setState(() => _message = 'فضای کاری ذخیره شد.');
-    } catch (error) {
-      if (mounted) setState(() => _error = errorText(error));
-    }
-  }
-
-  Future<void> _createWorkspace() async {
-    final name = TextEditingController();
-    final ok = await showFormSheet<bool>(
-      context,
-      builder: (context) => Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const PageHeader(title: 'فضای کاری جدید', description: 'نام فضای کاری را وارد کنید'),
-          TextField(controller: name, decoration: const InputDecoration(labelText: 'نام فضا')),
-          const SizedBox(height: 16),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('ساخت')),
-        ],
-      ),
-    );
-    final title = name.text.trim();
-    name.dispose();
-    if (ok != true || !mounted || title.isEmpty) return;
-    final session = context.read<SessionBloc>();
-    final api = context.read<WorkspaceRepository>();
-    try {
-      final created = await api.createWorkspace(title);
-      await session.reloadWorkspaces();
-      await session.selectWorkspace(created.id);
-      if (mounted) setState(() => _message = 'فضای کاری ساخته شد.');
-    } catch (error) {
-      if (mounted) setState(() => _error = errorText(error));
-    }
-  }
-
   Future<void> _disconnect(InstagramAccount account) async {
     final id = context.read<SessionBloc>().workspaceId;
     final api = context.read<InstagramRepository>();
@@ -891,7 +1047,7 @@ class _SettingsPageState extends State<SettingsPage> {
       return const Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          PageHeader(title: 'تنظیمات', description: 'حساب کاربری، فضای کاری و اینستاگرام'),
+          PageHeader(title: 'تنظیمات', description: 'حساب کاربری و اینستاگرام'),
           Expanded(child: LoadingView()),
         ],
       );
@@ -904,7 +1060,7 @@ class _SettingsPageState extends State<SettingsPage> {
       children: [
         PageHeader(
           title: 'تنظیمات',
-          description: 'حساب کاربری، فضای کاری و اینستاگرام',
+          description: 'حساب کاربری و اینستاگرام',
           action: OutlinedButton.icon(
             onPressed: session.logout,
             icon: const Icon(Icons.logout, size: 18),
@@ -948,39 +1104,6 @@ class _SettingsPageState extends State<SettingsPage> {
               TextField(controller: _email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'ایمیل')),
               const SizedBox(height: 16),
               FilledButton(onPressed: _saveProfile, child: const Text('ذخیره پروفایل')),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        SurfaceCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  const Expanded(child: Text('فضای کاری', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16))),
-                  if (session.workspace?.role != null) StatusBadge(label: faLabel(roleLabels, session.workspace?.role), color: dt.primary),
-                ],
-              ),
-              const SizedBox(height: 14),
-              if (session.workspaces.length > 1) ...[
-                DropdownButtonFormField<int>(
-                  initialValue: session.workspaceId,
-                  decoration: const InputDecoration(labelText: 'فضای فعال'),
-                  items: [for (final workspace in session.workspaces) DropdownMenuItem(value: workspace.id, child: Text(workspace.name))],
-                  onChanged: (value) {
-                    if (value != null) session.selectWorkspace(value);
-                  },
-                ),
-                const SizedBox(height: 10),
-              ],
-              TextField(controller: _workspaceName, decoration: const InputDecoration(labelText: 'نام')),
-              const SizedBox(height: 10),
-              TextField(controller: _timezone, decoration: const InputDecoration(labelText: 'منطقه زمانی')),
-              const SizedBox(height: 16),
-              FilledButton(onPressed: session.permissions.canEditWorkspace ? _saveWorkspace : null, child: const Text('ذخیره فضای کاری')),
-              const SizedBox(height: 10),
-              OutlinedButton.icon(onPressed: _createWorkspace, icon: const Icon(Icons.add), label: const Text('ایجاد')),
             ],
           ),
         ),
