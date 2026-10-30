@@ -1,0 +1,5 @@
+# Copy to store.properties (gitignored). Paste the RSA public keys from each store panel.
+# Cafe Bazaar: پیشخان → پرداخت درون‌برنامه‌ای. همین bazaarRsaKey را در env بک‌اند با نام BAZAAR_RSA_PUBLIC_KEY بگذار.
+# Myket: پنل توسعه‌دهندگان → پرداخت درون‌برنامه‌ای
+bazaarRsaKey=
+myketRsaKey=

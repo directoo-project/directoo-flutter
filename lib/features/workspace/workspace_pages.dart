@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/api_exception.dart';
 import '../../core/format.dart';
 import '../../core/labels.dart';
+import '../../core/store_billing.dart';
 import '../../core/permissions.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../domain/repositories/billing_repository.dart';
@@ -537,6 +538,7 @@ class _WalletPageState extends State<WalletPage> {
   var _filter = 'all';
   var _loading = true;
   var _submitting = false;
+  var _store = '';
   String? _message;
   String? _error;
 
@@ -544,6 +546,9 @@ class _WalletPageState extends State<WalletPage> {
   void initState() {
     super.initState();
     _load();
+    StoreBilling.config().then((config) {
+      if (mounted) setState(() => _store = config.store);
+    });
   }
 
   @override
@@ -589,12 +594,32 @@ class _WalletPageState extends State<WalletPage> {
       setState(() => _error = 'یک بسته یا مبلغ سفارشی انتخاب کنید.');
       return;
     }
+    final api = context.read<BillingRepository>();
     setState(() => _submitting = true);
     try {
-      final url = await context.read<BillingRepository>().topUp(id, packageId: payload.packageId, amount: payload.amount);
+      final config = await StoreBilling.config();
+      if (config.isStore) {
+        final packageId = payload.packageId;
+        if (packageId == null) {
+          setState(() => _error = 'در نسخه ${config.title} فقط بسته‌های مشخص قابل خرید هستند.');
+          return;
+        }
+        await StoreBilling.buySku(
+          api: api,
+          workspaceId: id,
+          sku: StoreBilling.walletSku(packageId),
+        );
+        if (!mounted) return;
+        setState(() => _message = 'کیف پول شارژ شد.');
+        await _load();
+        return;
+      }
+      final url = await api.topUp(id, packageId: payload.packageId, amount: payload.amount);
       await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } on StorePurchaseCancelled {
+      // The store dialog was closed.
     } catch (error) {
-      if (mounted) setState(() => _error = errorText(error));
+      if (mounted) setState(() => _error = error is StoreBillingException ? error.message : errorText(error));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -674,7 +699,10 @@ class _WalletPageState extends State<WalletPage> {
         const SizedBox(height: 12),
         TextField(controller: _amount, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'مبلغ سفارشی (تومان)'), onChanged: (_) => setState(() => _selected = null)),
         const SizedBox(height: 12),
-        FilledButton(onPressed: _submitting ? null : _topUp, child: Text(_submitting ? 'در حال اتصال...' : 'پرداخت آنلاین')),
+        FilledButton(
+          onPressed: _submitting ? null : _topUp,
+          child: Text(_submitting ? 'در حال اتصال...' : (_store == 'bazaar' ? 'پرداخت با کافه‌بازار' : _store == 'myket' ? 'پرداخت با مایکت' : 'پرداخت آنلاین')),
+        ),
         const SizedBox(height: 8),
         OutlinedButton(onPressed: _submitting ? null : _card, child: const Text('کارت به کارت و ارسال فیش')),
         const SizedBox(height: 16),
@@ -719,6 +747,7 @@ class _BillingPageState extends State<BillingPage> {
   final _referral = TextEditingController();
   var _loading = true;
   int? _busy;
+  var _store = '';
   String? _message;
   String? _error;
 
@@ -748,17 +777,20 @@ class _BillingPageState extends State<BillingPage> {
       try {
         payments = await api.payments(id);
       } catch (_) {}
+      final store = await StoreBilling.config();
       if (!mounted) return;
       setState(() {
         _plans = plans;
         _subscription = subscription;
         _wallet = wallet;
         _payments = payments;
+        _store = store.store;
         _error = null;
         if (!_pickedInterval && subscription != null) {
           _interval = subscription.billingInterval == 'yearly' ? 'yearly' : 'monthly';
         }
       });
+      if (store.isStore) StoreBilling.recover(api, id);
     } catch (error) {
       if (mounted) setState(() => _error = errorText(error));
     } finally {
@@ -797,6 +829,32 @@ class _BillingPageState extends State<BillingPage> {
     }
   }
 
+  Future<void> _payWithStore(Plan plan) async {
+    final session = context.read<SessionBloc>();
+    final id = session.workspaceId;
+    if (id == null) return;
+    setState(() => _busy = plan.id);
+    try {
+      await StoreBilling.buyPlan(
+        api: context.read<BillingRepository>(),
+        workspaceId: id,
+        plan: plan,
+        interval: _interval,
+      );
+      if (!mounted) return;
+      setState(() => _message = 'اشتراک با موفقیت به‌روز شد.');
+      await session.reloadWorkspaces();
+      if (!mounted) return;
+      await _load();
+    } on StorePurchaseCancelled {
+      // The store dialog was closed.
+    } catch (error) {
+      if (mounted) setState(() => _error = error is StoreBillingException ? error.message : errorText(error));
+    } finally {
+      if (mounted) setState(() => _busy = null);
+    }
+  }
+
   Future<void> _submitReceipt(Plan plan, String path, String filename) async {
     final id = context.read<SessionBloc>().workspaceId;
     if (id == null) return;
@@ -829,9 +887,14 @@ class _BillingPageState extends State<BillingPage> {
         discount: _discount,
         referral: _referral,
         walletBalance: _wallet?.balance,
+        store: _store,
         onGateway: () {
           Navigator.pop(sheetContext);
-          _upgrade(plan, 'gateway');
+          if ((_store == 'bazaar' || _store == 'myket') && plan.finalPrice(_interval) > 0 && plan.tier != 'free') {
+            _payWithStore(plan);
+          } else {
+            _upgrade(plan, 'gateway');
+          }
         },
         onWallet: () {
           Navigator.pop(sheetContext);
@@ -847,13 +910,20 @@ class _BillingPageState extends State<BillingPage> {
 
   @override
   Widget build(BuildContext context) {
-    const header = PageHeader(title: 'اشتراک', description: 'طرح، مصرف و پرداخت از درگاه، کیف پول یا کارت به کارت');
+    final header = PageHeader(
+      title: 'اشتراک',
+      description: switch (_store) {
+        'bazaar' => 'طرح، مصرف و پرداخت از کافه‌بازار، کیف پول یا کارت به کارت',
+        'myket' => 'طرح، مصرف و پرداخت از مایکت، کیف پول یا کارت به کارت',
+        _ => 'طرح، مصرف و پرداخت از درگاه، کیف پول یا کارت به کارت',
+      },
+    );
     if (_loading && _plans.isEmpty && _subscription == null) {
-      return const Column(
+      return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           header,
-          Expanded(child: _BillingSkeleton()),
+          const Expanded(child: _BillingSkeleton()),
         ],
       );
     }
@@ -1521,6 +1591,8 @@ class _PaymentRow extends StatelessWidget {
     final method = switch (payment.method) {
       'card_to_card' => 'کارت به کارت',
       'wallet' => 'کیف پول',
+      'bazaar' => 'کافه‌بازار',
+      'myket' => 'مایکت',
       _ => 'درگاه',
     };
     final title = payment.type == 'wallet_topup'
@@ -1569,6 +1641,7 @@ class _UpgradeSheet extends StatefulWidget {
     required this.discount,
     required this.referral,
     required this.walletBalance,
+    required this.store,
     required this.onGateway,
     required this.onWallet,
     required this.onReceipt,
@@ -1579,6 +1652,7 @@ class _UpgradeSheet extends StatefulWidget {
   final TextEditingController discount;
   final TextEditingController referral;
   final double? walletBalance;
+  final String store;
   final VoidCallback onGateway;
   final VoidCallback onWallet;
   final void Function(String path, String filename) onReceipt;
@@ -1648,8 +1722,14 @@ class _UpgradeSheetState extends State<_UpgradeSheet> {
           const SizedBox(height: 16),
           _PayTile(
             icon: Icons.credit_score_rounded,
-            title: 'پرداخت آنلاین',
-            subtitle: 'انتقال به درگاه و فعال‌سازی فوری',
+            title: switch (widget.store) {
+              'bazaar' => 'پرداخت با کافه‌بازار',
+              'myket' => 'پرداخت با مایکت',
+              _ => 'پرداخت آنلاین',
+            },
+            subtitle: widget.store == 'bazaar' || widget.store == 'myket'
+                ? 'خرید درون‌برنامه‌ای؛ مبلغ همان قیمت محصول در فروشگاه است'
+                : 'انتقال به درگاه و فعال‌سازی فوری',
             onTap: widget.onGateway,
           ),
           const SizedBox(height: 8),

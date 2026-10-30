@@ -20,6 +20,9 @@ class BillingRepositoryImpl implements BillingRepository {
   Future<String?> upgradePlan( int id, { required int planId, required String interval, required String paymentMethod, String discount = '', String referral = '', }) => _remote.upgradePlan(id, planId: planId, interval: interval, paymentMethod: paymentMethod, discount: discount, referral: referral);
 
   @override
+  Future<void> confirmStorePurchase(int id, {required String store, required String sku, required String purchaseToken, String orderId = '', String signedData = '', String signature = ''}) => _remote.confirmStorePurchase(id, store: store, sku: sku, purchaseToken: purchaseToken, orderId: orderId, signedData: signedData, signature: signature);
+
+  @override
   Future<CardInfo> cardInfo(int id) => _remote.cardInfo(id);
 
   @override

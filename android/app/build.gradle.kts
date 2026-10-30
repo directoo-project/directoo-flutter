@@ -13,6 +13,21 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+val storeProperties = Properties()
+val storePropertiesFile = rootProject.file("store.properties")
+if (storePropertiesFile.exists()) {
+    storeProperties.load(FileInputStream(storePropertiesFile))
+}
+
+fun javaStringLiteral(value: String?): String {
+    val escaped = (value ?: "")
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+        .replace("\r", "")
+        .replace("\n", "")
+    return "\"$escaped\""
+}
+
 android {
     namespace = "ir.directoo.directoo"
     compileSdk = flutter.compileSdkVersion
@@ -47,6 +62,32 @@ android {
         }
     }
 
+    buildFeatures {
+        buildConfig = true
+    }
+
+    flavorDimensions += "store"
+    productFlavors {
+        create("bazaar") {
+            dimension = "store"
+            buildConfigField("String", "STORE", "\"bazaar\"")
+            buildConfigField("String", "STORE_RSA_KEY", javaStringLiteral(storeProperties.getProperty("bazaarRsaKey")))
+            // Myket's billing AAR reads these placeholders. Point them at Cafe Bazaar
+            // in this flavor so the merged manifest does not request Myket billing.
+            manifestPlaceholders["marketApplicationId"] = "com.farsitel.bazaar"
+            manifestPlaceholders["marketBindAddress"] = "ir.cafebazaar.pardakht.InAppBillingService.BIND"
+            manifestPlaceholders["marketPermission"] = "com.farsitel.bazaar.permission.PAY_THROUGH_BAZAAR"
+        }
+        create("myket") {
+            dimension = "store"
+            buildConfigField("String", "STORE", "\"myket\"")
+            buildConfigField("String", "STORE_RSA_KEY", javaStringLiteral(storeProperties.getProperty("myketRsaKey")))
+            manifestPlaceholders["marketApplicationId"] = "ir.mservices.market"
+            manifestPlaceholders["marketBindAddress"] = "ir.mservices.market.InAppBillingService.BIND"
+            manifestPlaceholders["marketPermission"] = "ir.mservices.market.BILLING"
+        }
+    }
+
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
@@ -62,4 +103,11 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Each store output links only its own billing SDK. Both AARs ship the same
+    // IInAppBillingService class, so they cannot be packaged together.
+    "bazaarImplementation"("com.github.cafebazaar.Poolakey:poolakey:2.2.0")
+    "myketImplementation"("ir.myket:billing:2.2")
 }

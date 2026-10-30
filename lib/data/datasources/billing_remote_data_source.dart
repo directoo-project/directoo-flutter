@@ -10,6 +10,7 @@ abstract class BillingRemoteDataSource {
   Future<Subscription?> subscription(int id);
   Future<UpgradePreview> previewUpgrade(int id, {required int planId, required String interval, String discount = '', String referral = ''});
   Future<String?> upgradePlan( int id, { required int planId, required String interval, required String paymentMethod, String discount = '', String referral = '', });
+  Future<void> confirmStorePurchase(int id, {required String store, required String sku, required String purchaseToken, String orderId = '', String signedData = '', String signature = ''});
   Future<CardInfo> cardInfo(int id);
   Future<String> upgradeCardToCard( int id, { required int planId, required String interval, required String receiptPath, required String filename, String discount = '', String referral = '', });
   Future<List<PaymentRecord>> payments(int id);
@@ -79,6 +80,31 @@ class BillingRemoteDataSourceImpl implements BillingRemoteDataSource {
       final url = asString(data['payment_url']);
       return url.isEmpty ? null : url;
     }
+
+  @override
+  Future<void> confirmStorePurchase(
+    int id, {
+    required String store,
+    required String sku,
+    required String purchaseToken,
+    String orderId = '',
+    String signedData = '',
+    String signature = '',
+  }) {
+    return _client.post<void>(
+      workspacePath(id, 'billing/store-purchase/'),
+      auth: true,
+      data: {
+        'store': store,
+        'sku': sku,
+        'purchase_token': purchaseToken,
+        'order_id': orderId,
+        'signed_data': signedData,
+        'signature': signature,
+      },
+      parse: (_) {},
+    );
+  }
 
   @override
   Future<CardInfo> cardInfo(int id) {

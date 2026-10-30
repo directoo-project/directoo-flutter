@@ -720,6 +720,10 @@ class Plan {
     required this.durationDaysYearly,
     required this.maxConversations,
     required this.features,
+    this.bazaarSkuMonthly = '',
+    this.bazaarSkuYearly = '',
+    this.myketSkuMonthly = '',
+    this.myketSkuYearly = '',
   });
 
   final int id;
@@ -733,6 +737,21 @@ class Plan {
   final int? durationDaysYearly;
   final int maxConversations;
   final List<String> features;
+  final String bazaarSkuMonthly;
+  final String bazaarSkuYearly;
+  final String myketSkuMonthly;
+  final String myketSkuYearly;
+
+  /// Product token entered for this plan in the Django admin. Empty means the interval is not sold on that store.
+  String storeSku(String store, String interval) {
+    return switch ((store, interval)) {
+      ('bazaar', 'yearly') => bazaarSkuYearly,
+      ('bazaar', _) => bazaarSkuMonthly,
+      ('myket', 'yearly') => myketSkuYearly,
+      ('myket', _) => myketSkuMonthly,
+      _ => '',
+    };
+  }
 
   double listPrice(String interval) => interval == 'yearly' ? priceYearly : priceMonthly;
 
@@ -764,6 +783,10 @@ class Plan {
         durationDaysYearly: json['duration_days_yearly'] == null ? null : asInt(json['duration_days_yearly']),
         maxConversations: asInt(json['max_conversations']),
         features: asStringList(json['features']),
+        bazaarSkuMonthly: asString(json['bazaar_sku_monthly']),
+        bazaarSkuYearly: asString(json['bazaar_sku_yearly']),
+        myketSkuMonthly: asString(json['myket_sku_monthly']),
+        myketSkuYearly: asString(json['myket_sku_yearly']),
       );
 }
 

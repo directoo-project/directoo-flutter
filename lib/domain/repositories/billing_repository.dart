@@ -5,6 +5,7 @@ abstract class BillingRepository {
   Future<Subscription?> subscription(int id);
   Future<UpgradePreview> previewUpgrade(int id, {required int planId, required String interval, String discount = '', String referral = ''});
   Future<String?> upgradePlan( int id, { required int planId, required String interval, required String paymentMethod, String discount = '', String referral = '', });
+  Future<void> confirmStorePurchase(int id, {required String store, required String sku, required String purchaseToken, String orderId = '', String signedData = '', String signature = ''});
   Future<CardInfo> cardInfo(int id);
   Future<String> upgradeCardToCard( int id, { required int planId, required String interval, required String receiptPath, required String filename, String discount = '', String referral = '', });
   Future<List<PaymentRecord>> payments(int id);

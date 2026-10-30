@@ -2,6 +2,7 @@ allprojects {
     repositories {
         // Google Maven is unreachable from this network (404). Myket mirrors it.
         maven { url = uri("https://maven.myket.ir") }
+        maven { url = uri("https://jitpack.io") }
         google()
         mavenCentral()
     }
