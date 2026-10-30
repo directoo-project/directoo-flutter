@@ -894,17 +894,16 @@ class _OtpBoxesState extends State<_OtpBoxes> {
     final dt = context.dt;
     final value = widget.value;
     return SizedBox(
-      height: 64,
+      height: 56,
       child: Stack(
         children: [
           Row(
             textDirection: TextDirection.ltr,
             children: [
-              for (var i = 0; i < 6; i++)
+              for (var i = 0; i < 6; i++) ...[
+                if (i > 0) const SizedBox(width: 8),
                 Expanded(
-                  child: Container(
-                    margin: EdgeInsets.only(left: i == 0 ? 0 : 8),
-                    alignment: Alignment.center,
+                  child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: dt.surface,
                       borderRadius: BorderRadius.circular(14),
@@ -913,9 +912,15 @@ class _OtpBoxesState extends State<_OtpBoxes> {
                         width: widget.hasError || i == value.length ? 1.5 : 1,
                       ),
                     ),
-                    child: Text(i < value.length ? faDigits(value[i]) : '', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: dt.text)),
+                    child: Center(
+                      child: Text(
+                        i < value.length ? faDigits(value[i]) : '',
+                        style: TextStyle(fontSize: 22, height: 1, fontWeight: FontWeight.w800, color: dt.text),
+                      ),
+                    ),
                   ),
                 ),
+              ],
             ],
           ),
           Positioned.fill(
@@ -926,10 +931,23 @@ class _OtpBoxesState extends State<_OtpBoxes> {
               keyboardType: TextInputType.number,
               maxLength: 6,
               textDirection: TextDirection.ltr,
-              style: const TextStyle(color: Colors.transparent),
+              textAlignVertical: TextAlignVertical.center,
+              style: const TextStyle(color: Colors.transparent, fontSize: 22, height: 1),
               cursorColor: Colors.transparent,
+              cursorWidth: 0,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: const InputDecoration(counterText: '', border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none),
+              decoration: const InputDecoration(
+                counterText: '',
+                filled: false,
+                isCollapsed: true,
+                contentPadding: EdgeInsets.zero,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                focusedErrorBorder: InputBorder.none,
+              ),
               onChanged: widget.onChanged,
             ),
           ),
