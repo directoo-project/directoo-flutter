@@ -11,6 +11,8 @@ pluginManagement {
     includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
 
     repositories {
+        // Google Maven is unreachable from this network (404). Myket mirrors it.
+        maven { url = uri("https://maven.myket.ir") }
         google()
         mavenCentral()
         gradlePluginPortal()
@@ -24,3 +26,15 @@ plugins {
 }
 
 include(":app")
+
+// Flutter plugins resolve their own AGP from a buildscript classpath that only
+// lists Google Maven. That host 404s on this network, so the lookup fails
+// before the Android plugin is applied. Register the mirror before those
+// buildscripts run.
+gradle.projectsLoaded {
+    rootProject.allprojects {
+        buildscript.repositories {
+            maven { url = uri("https://maven.myket.ir") }
+        }
+    }
+}
