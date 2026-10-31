@@ -1242,7 +1242,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       Icon(Icons.camera_alt_outlined, color: dt.coral, size: 18),
                       const SizedBox(width: 8),
                       Expanded(child: Text('@${account.username}', textDirection: TextDirection.ltr, style: const TextStyle(fontWeight: FontWeight.w800))),
-                      if (session.permissions.canManageInstagram && !connectionLocked)
+                      if (session.permissions.canManageInstagram)
                         TextButton(
                           onPressed: () => _disconnect(account),
                           style: TextButton.styleFrom(foregroundColor: dt.error),

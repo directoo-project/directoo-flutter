@@ -113,7 +113,6 @@ class Workspace {
   bool get needsSubscription {
     if (hasPaidSubscription == null) return false;
     if (hasPaidSubscription == true) return false;
-    if (planTier == 'free' && subscriptionStatus == 'active') return false;
     return true;
   }
 
