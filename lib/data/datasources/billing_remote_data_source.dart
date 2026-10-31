@@ -10,7 +10,7 @@ abstract class BillingRemoteDataSource {
   Future<Subscription?> subscription(int id);
   Future<UpgradePreview> previewUpgrade(int id, {required int planId, required String interval, String discount = '', String referral = ''});
   Future<String?> upgradePlan( int id, { required int planId, required String interval, required String paymentMethod, String discount = '', String referral = '', });
-  Future<void> confirmStorePurchase(int id, {required String store, required String sku, required String purchaseToken, String orderId = '', String signedData = '', String signature = ''});
+  Future<void> confirmStorePurchase(int id, {required String store, required String sku, required String purchaseToken, String orderId = '', String signedData = '', String signature = '', int? amount, String packageId = ''});
   Future<CardInfo> cardInfo(int id);
   Future<String> upgradeCardToCard( int id, { required int planId, required String interval, required String receiptPath, required String filename, String discount = '', String referral = '', });
   Future<List<PaymentRecord>> payments(int id);
@@ -90,6 +90,8 @@ class BillingRemoteDataSourceImpl implements BillingRemoteDataSource {
     String orderId = '',
     String signedData = '',
     String signature = '',
+    int? amount,
+    String packageId = '',
   }) {
     return _client.post<void>(
       workspacePath(id, 'billing/store-purchase/'),
@@ -101,6 +103,8 @@ class BillingRemoteDataSourceImpl implements BillingRemoteDataSource {
         'order_id': orderId,
         'signed_data': signedData,
         'signature': signature,
+        'amount': ?amount,
+        if (packageId.isNotEmpty) 'package_id': packageId,
       },
       parse: (_) {},
     );

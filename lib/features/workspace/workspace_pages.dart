@@ -587,6 +587,14 @@ class _WalletPageState extends State<WalletPage> {
     return null;
   }
 
+  int? _packageAmount(String? packageId) {
+    if (packageId == null) return null;
+    for (final pack in _packages) {
+      if (pack.id == packageId) return pack.amount.round();
+    }
+    return null;
+  }
+
   Future<void> _topUp() async {
     final id = context.read<SessionBloc>().workspaceId;
     final payload = _payload();
@@ -598,7 +606,27 @@ class _WalletPageState extends State<WalletPage> {
     setState(() => _submitting = true);
     try {
       final config = await StoreBilling.config();
-      if (config.isStore) {
+      if (config.store == 'bazaar') {
+        final paid = payload.amount ?? _packageAmount(payload.packageId);
+        if (paid == null || paid <= 0) {
+          setState(() => _error = 'مبلغ شارژ نامعتبر است.');
+          return;
+        }
+        if (payload.amount != null && (paid < 10000 || paid > 50000000)) {
+          setState(() => _error = 'مبلغ باید بین ۱۰٬۰۰۰ تا ۵۰٬۰۰۰٬۰۰۰ تومان باشد.');
+          return;
+        }
+        await StoreBilling.buyWallet(
+          api: api,
+          workspaceId: id,
+          amountToman: paid,
+          packageId: payload.packageId,
+        );
+        if (!mounted) return;
+        setState(() => _message = 'کیف پول شارژ شد.');
+        await _load();
+        return;
+      } else if (config.isStore) {
         final packageId = payload.packageId;
         if (packageId == null) {
           setState(() => _error = 'در نسخه ${config.title} فقط بسته‌های مشخص قابل خرید هستند.');

@@ -5,10 +5,11 @@ import '../domain/entities/models.dart';
 import '../domain/repositories/billing_repository.dart';
 
 class StoreConfig {
-  const StoreConfig({required this.store, required this.rsaKey});
+  const StoreConfig({required this.store, required this.rsaKey, this.walletSku = ''});
 
   final String store;
   final String rsaKey;
+  final String walletSku;
 
   bool get isStore => store == 'bazaar' || store == 'myket';
 
@@ -67,6 +68,7 @@ class StoreBilling {
       return _config = StoreConfig(
         store: store == 'bazaar' || store == 'myket' ? store : '',
         rsaKey: rsaKey,
+        walletSku: raw?['walletSku']?.toString() ?? '',
       );
     } catch (_) {
       return _config = const StoreConfig(store: '', rsaKey: '');
@@ -74,6 +76,31 @@ class StoreBilling {
   }
 
   static String walletSku(String packageId) => 'directoo_wallet_$packageId';
+
+  static Future<void> buyWallet({
+    required BillingRepository api,
+    required int workspaceId,
+    required int amountToman,
+    String? packageId,
+  }) async {
+    final current = await _requireStore();
+    final sku = current.walletSku;
+    if (sku.isEmpty) {
+      throw StoreBillingException('شناسه کالای کیف پول ${current.title} تنظیم نشده است.');
+    }
+    if (amountToman <= 0) {
+      throw StoreBillingException('مبلغ شارژ نامعتبر است.');
+    }
+    try {
+      final bought = await _purchase(sku, payloadFor(workspaceId), priceRials: amountToman * 10);
+      await _acknowledge(current, api, workspaceId, bought, amountToman: amountToman, packageId: packageId ?? '');
+    } on StorePurchaseCancelled {
+      rethrow;
+    } catch (error, stack) {
+      final settled = await _settleSku(current, api, workspaceId, sku, amountToman: amountToman, packageId: packageId ?? '');
+      if (!settled) Error.throwWithStackTrace(error, stack);
+    }
+  }
 
   static String payloadFor(int workspaceId) => 'w$workspaceId';
 
@@ -142,11 +169,12 @@ class StoreBilling {
     _connected = true;
   }
 
-  static Future<_Owned> _purchase(String sku, String payload) async {
+  static Future<_Owned> _purchase(String sku, String payload, {int? priceRials}) async {
     try {
       final info = await _billing.invokeMapMethod<String, dynamic>('purchase', {
         'sku': sku,
         'payload': payload,
+        if (priceRials != null && priceRials > 0) 'priceRials': priceRials,
       });
       final token = info?['purchaseToken']?.toString() ?? '';
       if (info == null || info['purchaseState'] != 'PURCHASED' || token.isEmpty) {
@@ -165,12 +193,12 @@ class StoreBilling {
     }
   }
 
-  static Future<bool> _settleSku(StoreConfig current, BillingRepository api, int workspaceId, String sku) async {
+  static Future<bool> _settleSku(StoreConfig current, BillingRepository api, int workspaceId, String sku, {int? amountToman, String packageId = ''}) async {
     try {
       final match = (await _inventory()).where((item) => item.sku == sku).toList();
       if (match.isEmpty) return false;
       for (final item in match) {
-        await _acknowledge(current, api, workspaceId, item);
+        await _acknowledge(current, api, workspaceId, item, amountToman: amountToman, packageId: packageId);
       }
       return true;
     } catch (_) {
@@ -193,7 +221,7 @@ class StoreBilling {
     ];
   }
 
-  static Future<void> _acknowledge(StoreConfig current, BillingRepository api, int workspaceId, _Owned item) async {
+  static Future<void> _acknowledge(StoreConfig current, BillingRepository api, int workspaceId, _Owned item, {int? amountToman, String packageId = ''}) async {
     await api.confirmStorePurchase(
       workspaceId,
       store: current.store,
@@ -202,6 +230,8 @@ class StoreBilling {
       orderId: item.orderId,
       signedData: item.signedData,
       signature: item.signature,
+      amount: amountToman,
+      packageId: packageId,
     );
     try {
       await _billing.invokeMethod<void>('consume', {'token': item.token});

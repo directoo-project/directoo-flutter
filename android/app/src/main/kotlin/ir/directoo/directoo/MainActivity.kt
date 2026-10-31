@@ -16,6 +16,7 @@ class MainActivity : FlutterActivity() {
                     mapOf(
                         "store" to BuildConfig.STORE,
                         "rsaKey" to BuildConfig.STORE_RSA_KEY,
+                        "walletSku" to BuildConfig.WALLET_SKU,
                     ),
                 )
             } else {

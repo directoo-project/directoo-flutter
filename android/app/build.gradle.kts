@@ -19,6 +19,21 @@ if (storePropertiesFile.exists()) {
     storeProperties.load(FileInputStream(storePropertiesFile))
 }
 
+val dotenv = Properties()
+val dotenvFile = rootProject.file("../.env")
+if (dotenvFile.exists()) {
+    dotenvFile.forEachLine { line ->
+        val trimmed = line.trim()
+        if (trimmed.isEmpty() || trimmed.startsWith("#")) return@forEachLine
+        val separator = trimmed.indexOf('=')
+        if (separator <= 0) return@forEachLine
+        dotenv.setProperty(trimmed.substring(0, separator).trim(), trimmed.substring(separator + 1).trim())
+    }
+}
+
+fun configured(primary: String?, fallback: String?): String? =
+    primary?.trim()?.takeIf { it.isNotEmpty() } ?: fallback?.trim()?.takeIf { it.isNotEmpty() }
+
 fun javaStringLiteral(value: String?): String {
     val escaped = (value ?: "")
         .replace("\\", "\\\\")
@@ -55,10 +70,10 @@ android {
 
     signingConfigs {
         create("release") {
-            keyAlias = keystoreProperties.getProperty("keyAlias")
-            keyPassword = keystoreProperties.getProperty("keyPassword")
-            storeFile = keystoreProperties.getProperty("storeFile")?.let { file(it) }
-            storePassword = keystoreProperties.getProperty("storePassword")
+            keyAlias = configured(dotenv.getProperty("KEY_ALIAS"), keystoreProperties.getProperty("keyAlias"))
+            keyPassword = configured(dotenv.getProperty("KEY_PASSWORD"), keystoreProperties.getProperty("keyPassword"))
+            storeFile = configured(dotenv.getProperty("STORE_FILE"), keystoreProperties.getProperty("storeFile"))?.let { file(it) }
+            storePassword = configured(dotenv.getProperty("STORE_PASSWORD"), keystoreProperties.getProperty("storePassword"))
         }
     }
 
@@ -71,7 +86,9 @@ android {
         create("bazaar") {
             dimension = "store"
             buildConfigField("String", "STORE", "\"bazaar\"")
-            buildConfigField("String", "STORE_RSA_KEY", javaStringLiteral(storeProperties.getProperty("bazaarRsaKey")))
+            buildConfigField("String", "STORE_RSA_KEY", javaStringLiteral(configured(dotenv.getProperty("BAZAAR_RSA_PUBLIC_KEY"), storeProperties.getProperty("bazaarRsaKey"))))
+            buildConfigField("String", "DYNAMIC_PRICE_SECRET", javaStringLiteral(dotenv.getProperty("BAZAAR_DYNAMIC_PRICE_SECRET")))
+            buildConfigField("String", "WALLET_SKU", javaStringLiteral(configured(dotenv.getProperty("BAZAAR_WALLET_SKU"), "directoo_wallet")))
             // Myket's billing AAR reads these placeholders. Point them at Cafe Bazaar
             // in this flavor so the merged manifest does not request Myket billing.
             manifestPlaceholders["marketApplicationId"] = "com.farsitel.bazaar"
@@ -81,7 +98,9 @@ android {
         create("myket") {
             dimension = "store"
             buildConfigField("String", "STORE", "\"myket\"")
-            buildConfigField("String", "STORE_RSA_KEY", javaStringLiteral(storeProperties.getProperty("myketRsaKey")))
+            buildConfigField("String", "STORE_RSA_KEY", javaStringLiteral(configured(dotenv.getProperty("MYKET_RSA_PUBLIC_KEY"), storeProperties.getProperty("myketRsaKey"))))
+            buildConfigField("String", "DYNAMIC_PRICE_SECRET", "\"\"")
+            buildConfigField("String", "WALLET_SKU", "\"\"")
             manifestPlaceholders["marketApplicationId"] = "ir.mservices.market"
             manifestPlaceholders["marketBindAddress"] = "ir.mservices.market.InAppBillingService.BIND"
             manifestPlaceholders["marketPermission"] = "ir.mservices.market.BILLING"

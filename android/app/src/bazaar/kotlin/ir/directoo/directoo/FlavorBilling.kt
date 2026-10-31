@@ -2,6 +2,7 @@ package ir.directoo.directoo
 
 import android.app.Activity
 import android.content.Intent
+import android.util.Base64
 import androidx.activity.ComponentActivity
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -12,6 +13,10 @@ import ir.cafebazaar.poolakey.config.PaymentConfiguration
 import ir.cafebazaar.poolakey.config.SecurityCheck
 import ir.cafebazaar.poolakey.entity.PurchaseInfo
 import ir.cafebazaar.poolakey.request.PurchaseRequest
+import java.nio.charset.StandardCharsets
+import java.util.UUID
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 
 /**
  * Cafe Bazaar Poolakey bridge. The published Flutter plugin still calls jcenter(),
@@ -27,6 +32,7 @@ class FlavorBilling(private val activity: Activity) : MethodChannel.MethodCallHa
             "purchase" -> purchase(
                 call.argument<String>("sku").orEmpty(),
                 call.argument<String>("payload").orEmpty(),
+                longArgument(call, "priceRials"),
                 result,
             )
             "consume" -> consume(call.argument<String>("token").orEmpty(), result)
@@ -61,9 +67,54 @@ class FlavorBilling(private val activity: Activity) : MethodChannel.MethodCallHa
         }
     }
 
-    private fun purchase(sku: String, payload: String, result: MethodChannel.Result) {
+    private fun purchase(sku: String, payload: String, priceRials: Long, result: MethodChannel.Result) {
         val billing = connectedPayment(result) ?: return
-        BazaarPurchaseActivity.start(activity, billing, sku, payload, result)
+        if (priceRials <= 0) {
+            BazaarPurchaseActivity.start(activity, billing, sku, payload, null, 0, result)
+            return
+        }
+        val secret = BuildConfig.DYNAMIC_PRICE_SECRET
+        if (secret.isBlank()) {
+            result.error("PURCHASE_FAILED", "کلید تخفیف پویا در env تنظیم نشده است.", null)
+            return
+        }
+        billing.getInAppSkuDetails(listOf(sku)) {
+            getSkuDetailsSucceed { items ->
+                activity.runOnUiThread {
+                    val item = items.firstOrNull { it.sku == sku }
+                    if (item == null) {
+                        val debug = if (BuildConfig.DEBUG) " این نصب debug است و امضایش با نسخه پیشخان یکی نیست." else ""
+                        result.error(
+                            "PURCHASE_FAILED",
+                            "کالای $sku در کافه‌بازار پیدا نشد.$debug شناسه کالا و امضای برنامه باید با پیشخان یکی باشد.",
+                            null,
+                        )
+                        return@runOnUiThread
+                    }
+                    val ceiling = parseRials(item.price)
+                    if (ceiling != null && priceRials > ceiling) {
+                        result.error(
+                            "PURCHASE_FAILED",
+                            "مبلغ $priceRials ریال از قیمت ثبت‌شده برای $sku بیشتر است (${item.price}). در پیشخان قیمت کالا را به ریال، برابر سقف شارژ بگذار.",
+                            null,
+                        )
+                        return@runOnUiThread
+                    }
+                    val token = DynamicPriceToken.sign(
+                        secret = secret,
+                        packageName = activity.packageName,
+                        sku = sku,
+                        priceRials = priceRials,
+                    )
+                    BazaarPurchaseActivity.start(activity, billing, sku, payload, token, priceRials, result)
+                }
+            }
+            getSkuDetailsFailed {
+                activity.runOnUiThread {
+                    result.error("PURCHASE_FAILED", it.message ?: "جزئیات کالا از کافه‌بازار دریافت نشد.", null)
+                }
+            }
+        }
     }
 
     private fun consume(token: String, result: MethodChannel.Result) {
@@ -107,7 +158,11 @@ class BazaarPurchaseActivity : ComponentActivity() {
         }
         billing.purchaseProduct(
             activityResultRegistry,
-            PurchaseRequest(productId = productId, payload = payload),
+            PurchaseRequest(
+                productId = productId,
+                payload = payload,
+                dynamicPriceToken = dynamicPriceToken?.takeIf { it.isNotEmpty() },
+            ),
         ) {
             purchaseSucceed {
                 pending.success(it.toMap())
@@ -118,11 +173,11 @@ class BazaarPurchaseActivity : ComponentActivity() {
                 finish()
             }
             purchaseFailed {
-                pending.error("PURCHASE_FAILED", "خرید کافه‌بازار ناموفق بود.", null)
+                pending.error("PURCHASE_FAILED", paymentError(it.message), null)
                 finish()
             }
             failedToBeginFlow {
-                pending.error("PURCHASE_FAILED", it.message ?: "شروع خرید ناموفق بود.", null)
+                pending.error("PURCHASE_FAILED", paymentError(it.message ?: "شروع خرید ناموفق بود."), null)
                 finish()
             }
             purchaseFlowBegan { }
@@ -134,21 +189,77 @@ class BazaarPurchaseActivity : ComponentActivity() {
         private var result: MethodChannel.Result? = null
         private var productId: String = ""
         private var payload: String = ""
+        private var dynamicPriceToken: String? = null
+        private var priceRials: Long = 0
 
         fun start(
             activity: Activity,
             billing: Payment,
             sku: String,
             developerPayload: String,
+            priceToken: String?,
+            rials: Long,
             pending: MethodChannel.Result,
         ) {
             payment = billing
             result = pending
             productId = sku
             payload = developerPayload
+            dynamicPriceToken = priceToken
+            priceRials = rials
             activity.startActivity(Intent(activity, BazaarPurchaseActivity::class.java))
         }
+
+        fun paymentError(message: String?): String {
+            val detail = message?.takeIf { it.isNotBlank() } ?: "خرید کافه‌بازار ناموفق بود."
+            if (priceRials <= 0) return detail
+            return "$detail (sku=$productId, price=$priceRials ریال)"
+        }
     }
+}
+
+private fun longArgument(call: MethodCall, key: String): Long = when (val raw = call.argument<Any>(key)) {
+    is Int -> raw.toLong()
+    is Long -> raw
+    is Number -> raw.toLong()
+    else -> 0L
+}
+
+private object DynamicPriceToken {
+    fun sign(secret: String, packageName: String, sku: String, priceRials: Long): String {
+        val header = base64Url("""{"alg":"HS256","typ":"JWT"}""")
+        val exp = System.currentTimeMillis() / 1000 + 15 * 60
+        val body = base64Url(
+            """{"price":$priceRials,"package_name":"${jsonString(packageName)}","sku":"${jsonString(sku)}","exp":$exp,"nonce":"${UUID.randomUUID()}"}""",
+        )
+        val data = "$header.$body"
+        val mac = Mac.getInstance("HmacSHA256")
+        mac.init(SecretKeySpec(secret.toByteArray(StandardCharsets.UTF_8), "HmacSHA256"))
+        val signature = base64Url(mac.doFinal(data.toByteArray(StandardCharsets.UTF_8)))
+        return "$data.$signature"
+    }
+
+    private fun jsonString(value: String): String = value.replace("\\", "\\\\").replace("\"", "\\\"")
+
+    private fun base64Url(value: String): String = base64Url(value.toByteArray(StandardCharsets.UTF_8))
+
+    private fun base64Url(value: ByteArray): String =
+        Base64.encodeToString(value, Base64.NO_WRAP or Base64.NO_PADDING)
+            .replace('+', '-')
+            .replace('/', '_')
+}
+
+private fun parseRials(price: String): Long? {
+    val digits = buildString {
+        for (ch in price) {
+            when (ch) {
+                in '0'..'9' -> append(ch)
+                in '۰'..'۹' -> append('0' + (ch - '۰'))
+                in '٠'..'٩' -> append('0' + (ch - '٠'))
+            }
+        }
+    }
+    return digits.toLongOrNull()
 }
 
 private fun PurchaseInfo.toMap(): Map<String, Any?> = mapOf(
