@@ -1153,6 +1153,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final session = context.watch<SessionBloc>();
     final dt = context.dt;
     final user = _user;
+    final connectionLocked = session.workspace?.needsSubscription ?? false;
     final connected = _accounts.where((account) => account.status == 'connected' || account.status.isEmpty).toList();
     return ListView(
       children: [
@@ -1210,11 +1211,19 @@ class _SettingsPageState extends State<SettingsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('اینستاگرام', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+              Row(
+                children: [
+                  const Expanded(child: Text('اینستاگرام', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16))),
+                  if (connectionLocked) Icon(Icons.lock_outline, size: 18, color: dt.textSubtle),
+                ],
+              ),
               const SizedBox(height: 12),
-              if (connected.isEmpty)
+              if (connectionLocked)
+                Text('اتصال اینستاگرام بعد از فعال‌سازی اشتراک باز می‌شود.', style: TextStyle(color: dt.textSubtle, height: 1.6)),
+              if (connectionLocked && connected.isNotEmpty) const SizedBox(height: 12),
+              if (!connectionLocked && connected.isEmpty)
                 FilledButton(onPressed: () => context.go('/setup/instagram'), child: const Text('اتصال اینستاگرام'))
-              else
+              else if (connected.isNotEmpty)
                 for (final account in connected) ...[
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1233,7 +1242,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       Icon(Icons.camera_alt_outlined, color: dt.coral, size: 18),
                       const SizedBox(width: 8),
                       Expanded(child: Text('@${account.username}', textDirection: TextDirection.ltr, style: const TextStyle(fontWeight: FontWeight.w800))),
-                      if (session.permissions.canManageInstagram)
+                      if (session.permissions.canManageInstagram && !connectionLocked)
                         TextButton(
                           onPressed: () => _disconnect(account),
                           style: TextButton.styleFrom(foregroundColor: dt.error),

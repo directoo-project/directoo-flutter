@@ -201,6 +201,7 @@ const _subscriptionExempt = [
   '/dashboard/billing',
   '/dashboard/wallet',
   '/dashboard/settings',
+  '/dashboard/tickets',
 ];
 
 bool _active(String location, NavItem item) {
@@ -316,6 +317,7 @@ class _Sidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     final session = context.watch<SessionBloc>();
     final features = session.workspace?.features;
+    final subscriptionLocked = session.workspace?.needsSubscription ?? false;
     final dt = context.dt;
     return Material(
       color: dt.surface,
@@ -442,16 +444,25 @@ class _Sidebar extends StatelessWidget {
                       ),
                     ),
                   for (final item in section.items)
-                    if (features?.enabled(item.feature) ?? true)
+                    if (subscriptionLocked ||
+                        (features?.enabled(item.feature) ?? true))
                       _NavTile(
                         item: item,
+                        locked:
+                            subscriptionLocked &&
+                            !subscriptionExempt(item.path),
                         active: _active(location, item),
                         onTap: () {
+                          if (subscriptionLocked &&
+                              !subscriptionExempt(item.path)) {
+                            return;
+                          }
                           final router = GoRouter.of(context);
                           onNavigate?.call();
                           if (item.path == '/dashboard') {
-                            if (location != '/dashboard')
+                            if (location != '/dashboard') {
                               router.go('/dashboard');
+                            }
                             return;
                           }
                           if (location == item.path) return;
@@ -473,23 +484,26 @@ class _NavTile extends StatelessWidget {
     required this.item,
     required this.active,
     required this.onTap,
+    this.locked = false,
   });
 
   final NavItem item;
   final bool active;
   final VoidCallback onTap;
+  final bool locked;
 
   @override
   Widget build(BuildContext context) {
     final dt = context.dt;
+    final selected = active && !locked;
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Material(
-        color: active ? dt.primary50 : Colors.transparent,
+        color: selected ? dt.primary50 : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: onTap,
+          onTap: locked ? null : onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
             child: Row(
@@ -497,7 +511,11 @@ class _NavTile extends StatelessWidget {
                 Icon(
                   item.icon,
                   size: 20,
-                  color: active ? dt.primary : dt.textSubtle,
+                  color: locked
+                      ? dt.textSubtle
+                      : selected
+                      ? dt.primary
+                      : dt.textSubtle,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -505,11 +523,17 @@ class _NavTile extends StatelessWidget {
                     item.label,
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
-                      color: active ? dt.text : dt.textMuted,
+                      color: locked
+                          ? dt.textSubtle
+                          : selected
+                          ? dt.text
+                          : dt.textMuted,
                     ),
                   ),
                 ),
-                if (active)
+                if (locked)
+                  Icon(Icons.lock_outline, size: 16, color: dt.textSubtle),
+                if (selected)
                   Container(
                     width: 4,
                     height: 22,
@@ -601,7 +625,8 @@ class _TopBar extends StatelessWidget {
               else
                 const BrandLogo(height: 28),
               const Spacer(),
-              if (session.permissions.canReply ||
+              if ((workspace?.needsSubscription ?? false) ||
+                  session.permissions.canReply ||
                   (workspace?.features.enabled('tickets_enabled') ?? true))
                 IconButton(
                   tooltip: 'تیکت‌ها',
@@ -695,7 +720,11 @@ class _ShellBody extends StatelessWidget {
       return const _NoSubscription();
     }
     final feature = featureForPath(location);
-    if (feature != null && !workspace.features.enabled(feature)) {
+    final openedWhileUnsubscribed =
+        workspace.needsSubscription && subscriptionExempt(location);
+    if (feature != null &&
+        !workspace.features.enabled(feature) &&
+        !openedWhileUnsubscribed) {
       return const _FeatureDisabled();
     }
     final home = location == '/dashboard';
