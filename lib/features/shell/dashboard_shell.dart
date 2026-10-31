@@ -453,10 +453,6 @@ class _Sidebar extends StatelessWidget {
                             !subscriptionExempt(item.path),
                         active: _active(location, item),
                         onTap: () {
-                          if (subscriptionLocked &&
-                              !subscriptionExempt(item.path)) {
-                            return;
-                          }
                           final router = GoRouter.of(context);
                           onNavigate?.call();
                           if (item.path == '/dashboard') {
@@ -503,7 +499,7 @@ class _NavTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: locked ? null : onTap,
+          onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
             child: Row(
@@ -753,14 +749,44 @@ class _NoSubscription extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final workspace = context.watch<SessionBloc>().workspace;
+    final name = workspace?.name ?? '';
+    final planName = workspace?.planName ?? '';
+    final status = workspace?.subscriptionStatus;
+    final named = name.isEmpty ? null : 'فضای کاری $name';
+    final isFree = planName.isEmpty || planName == 'رایگان';
+    final String title;
+    final String description;
+    if (status == 'cancelled') {
+      title = named == null
+          ? 'اشتراک این فضای کاری لغو شده است'
+          : '$named اشتراکش لغو شده';
+      description =
+          'با فعال‌سازی مجدد اشتراک، همهٔ ابزارهای پنل دوباره در دسترس قرار می‌گیرند.';
+    } else if (status == 'past_due') {
+      title = named == null
+          ? 'پرداخت اشتراک معوق مانده است'
+          : 'پرداخت اشتراک $named معوق است';
+      description =
+          'پس از تکمیل پرداخت، دسترسی کامل پنل برای همین فضای کاری باز می‌شود.';
+    } else if (!isFree && status != 'active') {
+      title = named == null
+          ? 'طرح «$planName» دیگر فعال نیست'
+          : '$named طرح «$planName» فعال ندارد';
+      description = 'یک اشتراک جدید انتخاب کنید تا ابزارهای پنل دوباره فعال شوند.';
+    } else {
+      title = named == null
+          ? 'پنل دایرکتو با اشتراک فعال می‌شود'
+          : '$named را با یک اشتراک قدرتمند کامل کنید';
+      description =
+          'پاسخ هوشمند، کامنت هوشمند، مدیریت مشتریان و بقیهٔ ابزارها با انتخاب اشتراک در دسترس شماست.';
+    }
     return _CenteredNotice(
-      title:
-          'برای استفاده از پنل، اشتراک «${workspace?.name ?? ''}» را فعال کنید.',
-      description:
-          'بعد از پرداخت، ابزارهای پنل برای همین فضای کاری باز می‌شود.',
+      kicker: 'دسترسی اشتراک',
+      title: title,
+      description: description,
       action: FilledButton(
         onPressed: () => openDashboardRoute(context, '/dashboard/billing'),
-        child: const Text('مشاهده اشتراک‌ها'),
+        child: const Text('مشاهده و فعال‌سازی اشتراک'),
       ),
     );
   }
@@ -786,11 +812,13 @@ class _CenteredNotice extends StatelessWidget {
   const _CenteredNotice({
     required this.title,
     required this.description,
+    this.kicker,
     this.action,
   });
 
   final String title;
   final String description;
+  final String? kicker;
   final Widget? action;
 
   @override
@@ -819,6 +847,18 @@ class _CenteredNotice extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (kicker != null) ...[
+                  Text(
+                    kicker!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: dt.primary,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 Text(
                   title,
                   textAlign: TextAlign.center,
