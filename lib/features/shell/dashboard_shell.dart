@@ -82,6 +82,7 @@ const navSections = [
         path: '/dashboard/storefront',
         label: 'فروشگاه‌ساز',
         icon: Icons.storefront_outlined,
+        feature: 'storefront_enabled',
       ),
     ],
   ),
@@ -187,6 +188,7 @@ const _featurePaths = {
   '/dashboard/invoices': 'customers_enabled',
   '/dashboard/tickets': 'tickets_enabled',
   '/dashboard/products': 'products_enabled',
+  '/dashboard/storefront': 'storefront_enabled',
   '/dashboard/knowledge': 'knowledge_enabled',
   '/dashboard/automation': 'automation_enabled',
   '/dashboard/smart-answering': 'smart_reply_enabled',
@@ -444,27 +446,25 @@ class _Sidebar extends StatelessWidget {
                       ),
                     ),
                   for (final item in section.items)
-                    if (subscriptionLocked ||
-                        (features?.enabled(item.feature) ?? true))
-                      _NavTile(
-                        item: item,
-                        locked:
-                            subscriptionLocked &&
-                            !subscriptionExempt(item.path),
-                        active: _active(location, item),
-                        onTap: () {
-                          final router = GoRouter.of(context);
-                          onNavigate?.call();
-                          if (item.path == '/dashboard') {
-                            if (location != '/dashboard') {
-                              router.go('/dashboard');
-                            }
-                            return;
+                    _NavTile(
+                      item: item,
+                      locked: subscriptionLocked
+                          ? !subscriptionExempt(item.path)
+                          : !(features?.enabled(item.feature) ?? true),
+                      active: _active(location, item),
+                      onTap: () {
+                        final router = GoRouter.of(context);
+                        onNavigate?.call();
+                        if (item.path == '/dashboard') {
+                          if (location != '/dashboard') {
+                            router.go('/dashboard');
                           }
-                          if (location == item.path) return;
-                          router.push(item.path);
-                        },
-                      ),
+                          return;
+                        }
+                        if (location == item.path) return;
+                        router.push(item.path);
+                      },
+                    ),
                 ],
               ],
             ),
