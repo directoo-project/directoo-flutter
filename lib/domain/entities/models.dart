@@ -60,6 +60,7 @@ class WorkspaceFeatures {
 
   factory WorkspaceFeatures.fromJson(dynamic value) {
     const keys = [
+      'instagram_enabled',
       'inbox_enabled',
       'customers_enabled',
       'tickets_enabled',

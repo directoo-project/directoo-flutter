@@ -504,6 +504,17 @@ class _NavTile extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
             child: Row(
               children: [
+                if (selected) ...[
+                  Container(
+                    width: 4,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: dt.primary,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 Icon(
                   item.icon,
                   size: 20,
@@ -529,15 +540,6 @@ class _NavTile extends StatelessWidget {
                 ),
                 if (locked)
                   Icon(Icons.lock_outline, size: 16, color: dt.textSubtle),
-                if (selected)
-                  Container(
-                    width: 4,
-                    height: 22,
-                    decoration: BoxDecoration(
-                      color: dt.primary,
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                  ),
               ],
             ),
           ),
@@ -965,10 +967,9 @@ class _InstagramBannerState extends State<_InstagramBanner> {
   @override
   Widget build(BuildContext context) {
     if (!_missing) return const SizedBox.shrink();
-    final canConnect = context
-        .watch<SessionBloc>()
-        .permissions
-        .canManageInstagram;
+    final session = context.watch<SessionBloc>();
+    final connectionLocked = !(session.workspace?.features.enabled('instagram_enabled') ?? true);
+    final canConnect = session.permissions.canManageInstagram;
     final dt = context.dt;
 
     return Container(
@@ -998,33 +999,45 @@ class _InstagramBannerState extends State<_InstagramBanner> {
                 ),
               ),
               const SizedBox(width: 12),
-              const Expanded(
-                child: Text(
-                  'اینستاگرام متصل نیست',
-                  style: TextStyle(fontWeight: FontWeight.w800),
+              Expanded(
+                child: Row(
+                  children: [
+                    const Text(
+                      'اینستاگرام متصل نیست',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    if (connectionLocked) ...[
+                      const SizedBox(width: 6),
+                      Icon(Icons.lock_outline, size: 16, color: dt.textSubtle),
+                    ],
+                  ],
                 ),
               ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
-            'برای دریافت دایرکت و پاسخ هوشمند، حساب را وصل کنید.',
+            connectionLocked
+                ? 'اتصال اینستاگرام در اشتراک فعلی فعال نیست.'
+                : 'برای دریافت دایرکت و پاسخ هوشمند، حساب را وصل کنید.',
             style: TextStyle(color: dt.textMuted, height: 1.6),
           ),
-          const SizedBox(height: 12),
-          if (canConnect)
-            FilledButton(
-              onPressed: _connecting ? null : _connect,
-              child: Text(
-                _connecting ? 'در حال اتصال...' : 'اتصال به اینستاگرام',
+          if (!connectionLocked) ...[
+            const SizedBox(height: 12),
+            if (canConnect)
+              FilledButton(
+                onPressed: _connecting ? null : _connect,
+                child: Text(
+                  _connecting ? 'در حال اتصال...' : 'اتصال به اینستاگرام',
+                ),
+              )
+            else
+              Text(
+                'برای اتصال، از مدیر فضا بخواهید اینستاگرام را وصل کند.',
+                style: TextStyle(color: dt.textMuted),
               ),
-            )
-          else
-            Text(
-              'برای اتصال، از مدیر فضا بخواهید اینستاگرام را وصل کند.',
-              style: TextStyle(color: dt.textMuted),
-            ),
-          if (_error != null) Text(_error!, style: TextStyle(color: dt.error)),
+            if (_error != null) Text(_error!, style: TextStyle(color: dt.error)),
+          ],
         ],
       ),
     );

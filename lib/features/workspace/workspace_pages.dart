@@ -1153,7 +1153,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final session = context.watch<SessionBloc>();
     final dt = context.dt;
     final user = _user;
-    final connectionLocked = session.workspace?.needsSubscription ?? false;
+    final connectionLocked = !(session.workspace?.features.enabled('instagram_enabled') ?? true);
     final connected = _accounts.where((account) => account.status == 'connected' || account.status.isEmpty).toList();
     return ListView(
       children: [
@@ -1219,7 +1219,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const SizedBox(height: 12),
               if (connectionLocked)
-                Text('اتصال اینستاگرام بعد از فعال‌سازی اشتراک باز می‌شود.', style: TextStyle(color: dt.textSubtle, height: 1.6)),
+                Text('اتصال اینستاگرام در اشتراک فعلی فعال نیست.', style: TextStyle(color: dt.textSubtle, height: 1.6)),
               if (connectionLocked && connected.isNotEmpty) const SizedBox(height: 12),
               if (!connectionLocked && connected.isEmpty)
                 FilledButton(onPressed: () => context.go('/setup/instagram'), child: const Text('اتصال اینستاگرام'))
